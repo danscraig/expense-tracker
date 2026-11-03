@@ -188,12 +188,12 @@
       <div class="charts">
         <div class="chart-box">
           <h3>Spending by Category</h3>
-          <canvas id="categoryChart"></canvas>
+          <canvas id="categoryChart" title="Double-click a slice to see its transactions"></canvas>
           <p class="empty-note hidden" id="categoryEmpty">No expense data in this range.</p>
         </div>
         <div class="chart-box">
           <h3>Spending Over Time</h3>
-          <canvas id="timeChart"></canvas>
+          <canvas id="timeChart" title="Double-click a point to see its transactions"></canvas>
           <p class="empty-note hidden" id="timeEmpty">No expense data in this range.</p>
         </div>
       </div>
@@ -357,6 +357,19 @@
     <div class="modal-body">
       <ul id="recurringList" class="recurring-list"></ul>
       <p class="empty-note hidden" id="recurringEmpty">No monthly transactions yet.</p>
+    </div>
+  </div>
+</div>
+
+<div id="chartDetailModal" class="modal hidden">
+  <div class="modal-content recurring-content">
+    <div class="modal-header">
+      <h2 id="chartDetailTitle"></h2>
+      <button type="button" class="modal-close" id="chartDetailCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <p class="modal-preview" id="chartDetailSummary"></p>
+    <div class="modal-body">
+      <ul id="chartDetailList" class="recurring-list"></ul>
     </div>
   </div>
 </div>

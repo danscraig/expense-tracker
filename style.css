@@ -507,6 +507,8 @@ tbody tr:hover { background: #f9f8fe; }
 /* Header (title + close) stays put; only the body scrolls, and only vertically. */
 .recurring-content { width: 560px; max-height: 90vh; display: flex; flex-direction: column; }
 .recurring-content .modal-body { overflow-y: auto; overflow-x: hidden; min-height: 0; overscroll-behavior: contain; }
+#categoryChart, #timeChart { user-select: none; -webkit-user-select: none; }
+#chartDetailSummary { margin: 4px 0 0; }
 .btn-block { display: block; width: 100%; margin-top: 12px; }
 
 /* Keep the page behind an open window still, and stop grid children from

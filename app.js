@@ -769,6 +769,52 @@
     renderTimeChart(expenses);
   }
 
+  // ---------- chart drill-down: double-click a slice / point to list its transactions ----------
+
+  const drill = { category: [], time: { expenses: [], byDay: true } };
+  const chartDetailModal = document.getElementById("chartDetailModal");
+
+  function showChartDetail(title, rows) {
+    const total = rows.reduce((s, e) => s + e.amount, 0);
+    document.getElementById("chartDetailTitle").textContent = title;
+    document.getElementById("chartDetailSummary").textContent =
+      `${rows.length} transaction${rows.length === 1 ? "" : "s"} · ${fmtMoney(total)}`;
+    document.getElementById("chartDetailList").innerHTML = rows
+      .slice()
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((e) => `
+        <li class="recurring-item">
+          <span class="recurring-main">
+            <span>${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
+            <span class="recurring-sub">${e.date}${e.account ? " · " + escapeHtml(e.account) : ""}${e.recurring ? " · ↻ monthly" : ""}</span>
+          </span>
+          <strong class="amount-${e.type}">${fmtMoney(e.amount)}</strong>
+        </li>`)
+      .join("");
+    chartDetailModal.classList.remove("hidden");
+  }
+
+  document.getElementById("chartDetailCloseBtn").addEventListener("click", () => {
+    chartDetailModal.classList.add("hidden");
+  });
+
+  document.getElementById("categoryChart").addEventListener("dblclick", (ev) => {
+    if (!categoryChart) return;
+    const hit = categoryChart.getElementsAtEventForMode(ev, "nearest", { intersect: true }, true)[0];
+    if (!hit) return;
+    const cat = categoryChart.data.labels[hit.index];
+    showChartDetail(cat, drill.category.filter((e) => e.category === cat));
+  });
+
+  document.getElementById("timeChart").addEventListener("dblclick", (ev) => {
+    if (!timeChart) return;
+    const hit = timeChart.getElementsAtEventForMode(ev, "index", { intersect: false }, true)[0];
+    if (!hit) return;
+    const key = timeChart.data.labels[hit.index];
+    const { expenses, byDay } = drill.time;
+    showChartDetail(key, expenses.filter((e) => (byDay ? e.date : e.date.slice(0, 7)) === key));
+  });
+
   function renderCategoryChart(expenses) {
     const ctx = document.getElementById("categoryChart");
     const emptyNote = document.getElementById("categoryEmpty");
@@ -787,6 +833,7 @@
     ctx.classList.remove("hidden");
     emptyNote.classList.add("hidden");
 
+    drill.category = expenses;
     categoryChart = new Chart(ctx, {
       type: "pie",
       data: {
@@ -831,6 +878,7 @@
     });
     const labels = Object.keys(totals).sort();
 
+    drill.time = { expenses, byDay };
     timeChart = new Chart(ctx, {
       type: "line",
       data: {
@@ -1609,6 +1657,7 @@
     importModal: "importCancelBtn",
     recurringModal: "recurringCloseBtn",
     monthlyListModal: "monthlyListCloseBtn",
+    chartDetailModal: "chartDetailCloseBtn",
   };
 
   function closeModal(modalEl) {
