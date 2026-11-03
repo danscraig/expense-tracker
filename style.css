@@ -320,7 +320,7 @@ input[type="month"]::-webkit-date-and-time-value { text-align: left; min-height:
 .form-actions { display: flex; gap: 10px; margin-top: 4px; }
 .form-actions .btn { flex: 1; }
 
-.stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.stat-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
 
 .stat-card {
   background: #f9f8fe;

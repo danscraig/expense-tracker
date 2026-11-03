@@ -359,7 +359,7 @@
   closeTrackBtn.addEventListener("click", async () => {
     const track = currentTrack();
     if (!track || track.is_general) return;
-    if (!confirm(`Close "${track.name}"? Its net total will be added to General.`)) return;
+    if (!confirm(`Close "${track.name}"? Its transactions will be copied to General (reopening removes them again).`)) return;
     try {
       const { data, error } = await sb.rpc("close_track", { p_track_id: track.id });
       if (error) throw error;
@@ -762,6 +762,8 @@
 
     document.getElementById("statTotalSpending").textContent = fmtMoney(totalSpending);
     document.getElementById("statTotalIncome").textContent = fmtMoney(totalIncome);
+    document.getElementById("statSpentPct").textContent =
+      totalIncome > 0 ? (totalSpending / totalIncome * 100).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%" : "—";
     document.getElementById("statSavings").textContent = fmtMoney(savings);
     document.getElementById("statInvested").textContent = fmtMoney(totalInvested);
 
