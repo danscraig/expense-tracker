@@ -1007,48 +1007,74 @@
     renderPctChart();
   }
 
-  // ---------- measures: how this period compares with earlier ones ----------
+  // ---------- measures: % change against earlier periods ----------
 
-  // Compared like for like: "so far" this month / this year against the same days earlier.
-  function renderMeasures() {
-    const exp = state.data.filter((e) => e.type === "expense" && matchesFilters(e));
+  // The period being compared follows the Analytics range filter. A period that is still
+  // running (this month, this year) is compared like for like: up to the same day.
+  function measurePeriods() {
     const now = new Date();
-    const y = now.getFullYear(), m = now.getMonth() + 1, d = now.getDate();
+    const ny = now.getFullYear(), nm = now.getMonth() + 1, nd = now.getDate();
     const pad = (n) => String(n).padStart(2, "0");
-    const sum = (from, to) => exp.reduce((s, e) => (e.date >= from && e.date <= to ? s + e.amount : s), 0);
-    const upTo = (yy, mm) => yy + "-" + pad(mm) + "-" + pad(Math.min(d, new Date(yy, mm, 0).getDate()));
-    const first = (yy, mm) => yy + "-" + pad(mm) + "-01";
-    const prev = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
+    const dim = (y, m) => new Date(y, m, 0).getDate();
+    const iso = (y, m, d) => y + "-" + pad(m) + "-" + pad(d);
 
-    const thisMonth = sum(first(y, m), upTo(y, m));
-    const lastMonth = sum(first(prev.y, prev.m), upTo(prev.y, prev.m));
-    const sameMonthLY = sum(first(y - 1, m), upTo(y - 1, m));
-    const ytd = sum(y + "-01-01", upTo(y, m));
-    const ytdLY = sum((y - 1) + "-01-01", upTo(y - 1, m));
-
-    // Average of the last 3 complete months that have spending.
-    const fullMonths = [];
-    for (let k = 1; k <= 3; k++) {
-      const dt = new Date(y, m - 1 - k, 1);
-      const yy = dt.getFullYear(), mm = dt.getMonth() + 1;
-      const total = sum(first(yy, mm), yy + "-" + pad(mm) + "-31");
-      if (total > 0) fullMonths.push(total);
+    let kind = null, y = ny, m = nm, d = 1;
+    const mode = rangeSelect.value;
+    if (mode === "month") kind = "month";
+    else if (mode === "year") kind = "year";
+    else if (mode === "custom" && yearFilter.value !== "all") {
+      y = Number(yearFilter.value);
+      const mv = monthFilter.value, dv = dayFilter.value;
+      if (mv === "all" && dv === "all") kind = "year";
+      else if (mv !== "all" && dv === "all") { kind = "month"; m = Number(mv); }
+      else if (mv !== "all" && dv !== "all") { kind = "day"; m = Number(mv); d = Number(dv); }
     }
-    const avg = fullMonths.length ? fullMonths.reduce((s, v) => s + v, 0) / fullMonths.length : 0;
+    if (!kind) return null;
 
-    const card = (label, cur, before, none) => {
-      if (!(before > 0)) return `<div class="stat-card"><span class="stat-label">${label}</span><span class="stat-value">—</span><span class="measure-sub">${none}</span></div>`;
-      const diff = cur - before;
-      const pct = diff / before * 100;
-      const sign = diff > 0 ? "+" : "";
-      const cls = diff > 0 ? "neg" : diff < 0 ? "pos" : "";
-      return `<div class="stat-card"><span class="stat-label">${label}</span><span class="stat-value ${cls}">${sign}${fmtMoney(diff)}</span><span class="measure-sub">${sign}${pct.toFixed(1)}% · ${fmtMoney(cur)} vs ${fmtMoney(before)}</span></div>`;
+    // [from, to] of a day, month or year, ending today if it is the one in progress
+    const span = (k, yy, mm, dd) => {
+      if (k === "day") return [iso(yy, mm, Math.min(dd, dim(yy, mm))), iso(yy, mm, Math.min(dd, dim(yy, mm)))];
+      if (k === "month") {
+        const live = kind === "month" && y === ny && m === nm;
+        return [iso(yy, mm, 1), iso(yy, mm, live ? Math.min(nd, dim(yy, mm)) : dim(yy, mm))];
+      }
+      const live = kind === "year" && y === ny;
+      return [iso(yy, 1, 1), live ? iso(yy, nm, Math.min(nd, dim(yy, nm))) : iso(yy, 12, 31)];
     };
-    document.getElementById("measures").innerHTML =
-      card("This month vs last month", thisMonth, lastMonth, "Nothing by this day last month") +
-      card("This month vs last year", thisMonth, sameMonthLY, "No data for last year") +
-      card("Year to date vs last year", ytd, ytdLY, "No data for last year") +
-      `<div class="stat-card"><span class="stat-label">Monthly average</span><span class="stat-value">${avg > 0 ? fmtMoney(avg) : "—"}</span><span class="measure-sub">${avg > 0 ? "Last " + fullMonths.length + " full month" + (fullMonths.length === 1 ? "" : "s") : "No full months yet"}</span></div>`;
+
+    const cur = span(kind, y, m, d);
+    if (kind === "day") {
+      const p = new Date(y, m - 1, d - 1);
+      return { kind, cur, prev: span("day", p.getFullYear(), p.getMonth() + 1, p.getDate()), prevLabel: "vs previous day", ly: span("day", y - 1, m, d), lyLabel: "vs same day last year" };
+    }
+    if (kind === "month") {
+      const p = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
+      return { kind, cur, prev: span("month", p.y, p.m, 1), prevLabel: "vs previous month", ly: span("month", y - 1, m, 1), lyLabel: "vs same month last year" };
+    }
+    return { kind, cur, prev: null, ly: span("year", y - 1, 1, 1), lyLabel: "vs previous year" };
+  }
+
+  function renderMeasures() {
+    const box = document.getElementById("measures");
+    const periods = measurePeriods();
+    if (!periods) { box.innerHTML = ""; box.classList.add("hidden"); return; }
+    box.classList.remove("hidden");
+
+    // Same category / entries / type filters as the charts.
+    const exp = state.data.filter((e) => e.type === "expense" && matchesFilters(e));
+    const sum = ([from, to]) => exp.reduce((s, e) => (e.date >= from && e.date <= to ? s + e.amount : s), 0);
+    const now = sum(periods.cur);
+
+    const card = (label, range) => {
+      const before = sum(range);
+      if (!(before > 0)) return `<div class="stat-card"><span class="stat-label">${label}</span><span class="stat-value">—</span></div>`;
+      const pct = (now - before) / before * 100;
+      const cls = pct > 0 ? "neg" : pct < 0 ? "pos" : "";
+      return `<div class="stat-card"><span class="stat-label">${label}</span><span class="stat-value ${cls}">${pct > 0 ? "+" : ""}${pct.toFixed(1)}%</span></div>`;
+    };
+    box.innerHTML =
+      (periods.prev ? card(periods.prevLabel, periods.prev) : "") +
+      card(periods.lyLabel, periods.ly);
   }
 
   // Month by month, this year next to last year.
