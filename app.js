@@ -28,6 +28,7 @@
     pendingDelete: null,
     pendingTrackDelete: null,
     tab: "home",
+    homeRange: "month",
   };
 
   // ---------- helpers ----------
@@ -217,6 +218,10 @@
     const dashCategoryEl = document.getElementById("dashCategoryFilter");
     dashCategoryEl.innerHTML = categoryFilterEl.innerHTML;
     dashCategoryEl.value = categoryFilterEl.value;
+    // ...and so does the Home one.
+    const homeCategoryEl = document.getElementById("homeCategoryFilter");
+    homeCategoryEl.innerHTML = categoryFilterEl.innerHTML;
+    homeCategoryEl.value = categoryFilterEl.value;
 
     refreshYearFilter();
   }
@@ -1393,11 +1398,14 @@
     state.categoryFilterValue = value;
     categoryFilter.value = value;
     dashCategoryFilter.value = value;
+    document.getElementById("homeCategoryFilter").value = value;
     renderTable();
     renderDashboard();
+    renderHome();
   }
   categoryFilter.addEventListener("change", () => setCategoryFilter(categoryFilter.value));
   dashCategoryFilter.addEventListener("change", () => setCategoryFilter(dashCategoryFilter.value));
+  document.getElementById("homeCategoryFilter").addEventListener("change", (e) => setCategoryFilter(e.target.value));
 
   const typeFilter = document.getElementById("typeFilter");
   typeFilter.addEventListener("change", () => {
@@ -1414,11 +1422,14 @@
     state.sourceFilterValue = value;
     sourceFilter.value = value;
     dashSourceFilter.value = value;
+    document.getElementById("homeSourceFilter").value = value;
     renderTable();
     renderDashboard();
+    renderHome();
   }
   sourceFilter.addEventListener("change", () => setSourceFilter(sourceFilter.value));
   dashSourceFilter.addEventListener("change", () => setSourceFilter(dashSourceFilter.value));
+  document.getElementById("homeSourceFilter").addEventListener("change", (e) => setSourceFilter(e.target.value));
 
   // Shared by the Clear Filters button in both tabs — Range isn't part of
   // this (it's not something either tab's Clear Filters ever reset).
@@ -1433,11 +1444,24 @@
     typeFilter.value = "";
     sourceFilter.value = "";
     dashSourceFilter.value = "";
+    document.getElementById("homeCategoryFilter").value = "";
+    document.getElementById("homeSourceFilter").value = "";
     renderTable();
     renderDashboard();
+    renderHome();
   }
   document.getElementById("clearFiltersBtn").addEventListener("click", clearAllFilters);
   document.getElementById("dashClearFiltersBtn").addEventListener("click", clearAllFilters);
+  document.getElementById("homeClearFiltersBtn").addEventListener("click", () => {
+    state.homeRange = "month";
+    document.getElementById("homeRangeSelect").value = "month";
+    clearAllFilters();
+  });
+  document.getElementById("homeRangeSelect").addEventListener("change", (e) => {
+    state.homeRange = e.target.value;
+    renderHome();
+    updateFilterBadges();
+  });
 
   // The Type filter lives only in the Transactions tab but also shapes the
   // Dashboard; say so on the Dashboard so its numbers aren't a mystery.
@@ -2217,6 +2241,7 @@
   }
   setupFiltersToggle("txFiltersBtn", "txFilters");
   setupFiltersToggle("dashFiltersBtn", "dashFilters");
+  setupFiltersToggle("homeFiltersBtn", "homeFilters");
 
   // "Filters (2)": how many filters are active, so a closed panel still tells you.
   function updateFilterBadges() {
@@ -2224,6 +2249,8 @@
     const dash = [state.categoryFilterValue, state.sourceFilterValue].filter(Boolean).length + (rangeSelect.value !== "month" ? 1 : 0);
     document.getElementById("txFiltersBtn").innerHTML = "Filters" + (tx ? ` <span class="filters-count">${tx}</span>` : "");
     document.getElementById("dashFiltersBtn").innerHTML = "Filters" + (dash ? ` <span class="filters-count">${dash}</span>` : "");
+    const home = [state.categoryFilterValue, state.sourceFilterValue].filter(Boolean).length + (state.homeRange !== "month" ? 1 : 0);
+    document.getElementById("homeFiltersBtn").innerHTML = "Filters" + (home ? ` <span class="filters-count">${home}</span>` : "");
   }
 
   // ---------- home ----------
@@ -2231,10 +2258,25 @@
   const homeFmtMonth = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" });
 
   function renderHome() {
+    // Period, category and entries (monthly / manual) filters; the type is never filtered here.
+    const now = new Date();
     const ym = todayISO().slice(0, 7);
-    document.getElementById("homeMonth").textContent = homeFmtMonth.format(new Date()) + (currentTrack() && !currentTrack().is_general ? " · " + currentTrack().name : "");
+    const lastM = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastYm = lastM.getFullYear() + "-" + String(lastM.getMonth() + 1).padStart(2, "0");
+    const range = state.homeRange;
+    const inPeriod = (e) => range === "all" ||
+      (range === "month" && e.date.slice(0, 7) === ym) ||
+      (range === "lastMonth" && e.date.slice(0, 7) === lastYm) ||
+      (range === "year" && e.date.slice(0, 4) === ym.slice(0, 4));
+    const hasFilter = !!(state.categoryFilterValue || state.sourceFilterValue);
+    const month = state.data.filter((e) => inPeriod(e) &&
+      (!state.categoryFilterValue || displayCategory(e) === state.categoryFilterValue) &&
+      (!state.sourceFilterValue || e.recurring === (state.sourceFilterValue === "recurring")));
 
-    const month = state.data.filter((e) => e.date.slice(0, 7) === ym);
+    const periodLabel = range === "all" ? "All time"
+      : range === "year" ? String(now.getFullYear())
+      : homeFmtMonth.format(range === "lastMonth" ? lastM : now);
+    document.getElementById("homeMonth").textContent = periodLabel + (currentTrack() && !currentTrack().is_general ? " · " + currentTrack().name : "");
     const spent = month.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
     const income = month.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
     const invested = month.filter((e) => e.type === "investment").reduce((s, e) => s + e.amount, 0);
@@ -2254,9 +2296,11 @@
     // Progress towards the part of income you can spend (SPEND_TARGET_PCT, 60%).
     // Until this month's salary shows up in the transactions, the monthly (recurring)
     // income rules stand in for it.
-    renderHomeMeter(month, spent, income);
+    // (Only for this month with nothing filtered, since it compares all spending with all income.)
+    if (range === "month" && !hasFilter) renderHomeMeter(month, spent, income);
+    else document.getElementById("homeMeterBlock").classList.add("hidden");
 
-    const recent = state.data.slice()
+    const recent = month.slice()
       .sort((x, y) => (x.date < y.date ? 1 : x.date > y.date ? -1 : 0))
       .slice(0, 6);
     document.getElementById("homeEmpty").classList.toggle("hidden", recent.length > 0);

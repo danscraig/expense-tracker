@@ -823,3 +823,7 @@ body:has(.modal:not(.hidden)) { overflow: hidden; }
 .measures { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 230px)); justify-content: start; gap: 12px; margin-bottom: 20px; }
 .measures .stat-card { min-height: 0; }
 @media (max-width: 600px) { .measures { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; } }
+
+/* ---------- home filters ---------- */
+.home-panel .table-header.has-filters { margin-bottom: 12px; }
+.table-header.has-filters .home-month { margin: 0; }

@@ -77,7 +77,29 @@
 
   <div id="tab-home" class="tab-pane" role="tabpanel">
     <section class="panel home-panel">
-      <p class="home-month" id="homeMonth"></p>
+      <div class="table-header has-filters">
+        <p class="home-month" id="homeMonth"></p>
+        <button type="button" class="btn btn-ghost filters-toggle" id="homeFiltersBtn" aria-expanded="false" aria-controls="homeFilters">Filters</button>
+        <div class="table-filters">
+         <div class="filters-panel" id="homeFilters">
+          <select id="homeRangeSelect" aria-label="Period">
+            <option value="month" selected>This month</option>
+            <option value="lastMonth">Last month</option>
+            <option value="year">This year</option>
+            <option value="all">All time</option>
+          </select>
+          <select id="homeCategoryFilter" aria-label="Category">
+            <option value="">All Categories</option>
+          </select>
+          <select id="homeSourceFilter" aria-label="Entries">
+            <option value="">All Entries</option>
+            <option value="recurring">Monthly only</option>
+            <option value="manual">Manual only</option>
+          </select>
+          <button type="button" class="btn btn-ghost" id="homeClearFiltersBtn">Clear Filters</button>
+         </div>
+        </div>
+      </div>
       <div class="stat-cards" id="homeCards">
         <div class="stat-card"><span class="stat-label">Spent</span><span class="stat-value" id="homeSpent">€0.00</span></div>
         <div class="stat-card"><span class="stat-label">Income</span><span class="stat-value" id="homeIncome">€0.00</span></div>
@@ -97,7 +119,7 @@
         <div class="home-pie-canvas"><canvas id="homePie"></canvas></div>
         <ul class="pie-legend" id="homePieLegend"></ul>
       </div>
-      <p class="empty-note hidden" id="homePieEmpty">No expenses this month.</p>
+      <p class="empty-note hidden" id="homePieEmpty">No expenses.</p>
     </section>
     <section class="panel home-panel home-recent">
       <div class="table-header">
