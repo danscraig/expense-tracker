@@ -27,8 +27,7 @@
     sourceFilterValue: "",
     pendingDelete: null,
     pendingTrackDelete: null,
-    tab: "add",
-    editReturnTab: null,
+    tab: "home",
   };
 
   // ---------- helpers ----------
@@ -262,6 +261,7 @@
       authScreen.classList.add("hidden");
       appContent.classList.remove("hidden");
       logoutBtn.classList.remove("hidden");
+      document.getElementById("settingsEmail").textContent = session.user && session.user.email ? "Signed in as " + session.user.email : "";
       initAfterLogin();
     } else {
       initialized = false;
@@ -765,9 +765,7 @@
   cancelEditBtn.addEventListener("click", () => exitEditMode());
 
   function enterEditMode(rec) {
-    // The form lives in the Add Expense tab; remember where to go back to.
-    if (state.tab !== "add") state.editReturnTab = state.tab;
-    showTab("add");
+    openExpenseModal();
     state.editId = rec.id;
     document.getElementById("expenseId").value = rec.id;
     document.getElementById("amount").value = rec.amount;
@@ -780,7 +778,6 @@
     formTitle.textContent = "Edit Expense";
     submitBtn.textContent = "Save Changes";
     cancelEditBtn.classList.remove("hidden");
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function exitEditMode() {
@@ -792,13 +789,33 @@
     formTitle.textContent = "Add Expense";
     submitBtn.textContent = "Add Expense";
     cancelEditBtn.classList.add("hidden");
-    // Finished (or cancelled) an edit that was started from another tab: go back.
-    if (state.editReturnTab) {
-      const back = state.editReturnTab;
-      state.editReturnTab = null;
-      if (state.tab === "add") showTab(back);
-    }
+    closeExpenseModal();
   }
+
+  // ---------- add / edit window ----------
+
+  const expenseModal = document.getElementById("expenseModal");
+
+  function openExpenseModal() {
+    expenseModal.classList.remove("hidden");
+  }
+
+  function closeExpenseModal() {
+    expenseModal.classList.add("hidden");
+  }
+
+  // The "+" in the middle of the tab bar: add an expense from any tab.
+  document.getElementById("addFab").addEventListener("click", () => {
+    if (isCurrentTrackClosed()) {
+      toast("This track is closed. Reopen it to make changes.");
+      return;
+    }
+    if (state.editId) exitEditMode();
+    openExpenseModal();
+    document.getElementById("amount").focus();
+  });
+
+  document.getElementById("expenseCloseBtn").addEventListener("click", () => exitEditMode());
 
   // ---------- tabs ----------
 
@@ -813,7 +830,8 @@
     });
     document.querySelectorAll(".tab-pane").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + name));
     // Charts drawn while their tab was hidden have no size; draw them again now.
-    if (name === "dashboard") renderDashboard();
+    if (name === "analytics") renderDashboard();
+    if (name === "home") renderHome();
     window.scrollTo({ top: 0 });
   }
 
@@ -930,6 +948,20 @@
   let pctChart = null;
   const SPEND_TARGET_PCT = 60;
 
+  // One look for every chart: the page font, muted text, faint grid, dark tooltips.
+  if (window.Chart) {
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    Chart.defaults.font.size = 12;
+    Chart.defaults.color = "#716e76";
+    Chart.defaults.borderColor = "rgba(54, 75, 89, 0.08)";
+    Chart.defaults.plugins.legend.labels.usePointStyle = true;
+    Chart.defaults.plugins.legend.labels.boxWidth = 8;
+    Chart.defaults.plugins.tooltip.backgroundColor = "#192229";
+    Chart.defaults.plugins.tooltip.padding = 10;
+    Chart.defaults.plugins.tooltip.cornerRadius = 8;
+    Chart.defaults.plugins.tooltip.boxPadding = 4;
+  }
+
   // "Accessible Orchid" data colors, taken from the theme used in 2026.pbix
   const BASE_PALETTE = ["#364B59", "#C480A7", "#663466", "#6E98B5", "#67002E", "#5D8099", "#3F213F", "#EC64A9"];
   const SHADE_STEPS = [0, 0.35, -0.3, 0.6, -0.55];
@@ -971,6 +1003,9 @@
     document.getElementById("statSpentPct").textContent =
       totalIncome > 0 ? (totalSpending / totalIncome * 100).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%" : "—";
     document.getElementById("statSavings").textContent = fmtMoney(savings);
+    document.getElementById("statSavings").classList.toggle("neg", savings < 0);
+    document.getElementById("statSavings").classList.toggle("pos", savings > 0);
+    document.getElementById("statSpentPct").classList.toggle("neg", totalIncome > 0 && totalSpending / totalIncome * 100 > SPEND_TARGET_PCT);
     document.getElementById("statInvested").textContent = fmtMoney(totalInvested);
 
     renderCategoryChart(expenses);
@@ -1048,6 +1083,7 @@
           },
         },
         scales: {
+          x: { grid: { display: false } },
           y: { beginAtZero: true, ticks: { callback: (v) => v + "%" } },
         },
       },
@@ -1126,6 +1162,9 @@
         datasets: [{
           data: labels.map((l) => totals[l]),
           backgroundColor: labels.map((_, i) => paletteColor(i)),
+          borderColor: "#ffffff",
+          borderWidth: 2,
+          hoverOffset: 6,
         }],
       },
       options: {
@@ -1185,6 +1224,7 @@
           tooltip: { callbacks: { label: (ctx) => fmtMoney(ctx.parsed.y) } },
         },
         scales: {
+          x: { grid: { display: false } },
           y: { ticks: { callback: (v) => fmtMoney(v) } },
         },
       },
@@ -1292,6 +1332,9 @@
     );
 
     const { key, dir } = state.sort;
+    document.querySelectorAll("#expenseTable thead th[data-sort]").forEach((th) => {
+      th.setAttribute("aria-sort", th.dataset.sort === key ? (dir === "asc" ? "ascending" : "descending") : "none");
+    });
     rows = rows.slice().sort((a, b) => {
       let av = key === "category" ? displayCategory(a) : a[key];
       let bv = key === "category" ? displayCategory(b) : b[key];
@@ -1888,6 +1931,8 @@
     let snoozeUntil = null;
     try { snoozeUntil = localStorage.getItem(BACKUP_SNOOZE_KEY); } catch (_) { /* storage blocked */ }
 
+    document.getElementById("settingsBackup").textContent = last ? `Last backup: ${last}` : "Last backup: never";
+
     const show = age >= BACKUP_INTERVAL_DAYS && !(snoozeUntil && snoozeUntil > today);
     backupBanner.classList.toggle("hidden", !show);
     if (show) {
@@ -1946,6 +1991,7 @@
   // Order matters: Escape closes the last open one, so windows that open on
   // top of another (the Monthly list) come after it.
   const MODAL_CLOSE_BUTTONS = {
+    expenseModal: "expenseCloseBtn",
     importModal: "importCancelBtn",
     newTrackModal: "newTrackCloseBtn",
     trackCatsModal: "trackCatsCloseBtn",
@@ -2002,7 +2048,64 @@
     refreshDatalists();
     renderDashboard();
     renderTable();
+    renderHome();
   }
+
+  // ---------- home ----------
+
+  const homeFmtMonth = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" });
+
+  function renderHome() {
+    const ym = todayISO().slice(0, 7);
+    document.getElementById("homeMonth").textContent = homeFmtMonth.format(new Date()) + (currentTrack() && !currentTrack().is_general ? " · " + currentTrack().name : "");
+
+    const month = state.data.filter((e) => e.date.slice(0, 7) === ym);
+    const spent = month.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
+    const income = month.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
+    const savings = income - spent;
+    document.getElementById("homeSpent").textContent = fmtMoney(spent);
+    document.getElementById("homeIncome").textContent = fmtMoney(income);
+    const sv = document.getElementById("homeSavings");
+    sv.textContent = fmtMoney(savings);
+    sv.classList.toggle("neg", savings < 0);
+    sv.classList.toggle("pos", savings > 0);
+
+    // How much of this month's income is spent, against the 60% target.
+    const block = document.getElementById("homeMeterBlock");
+    if (income > 0) {
+      const pct = spent / income * 100;
+      block.classList.remove("hidden");
+      document.getElementById("homeMeterText").textContent = `Spent ${pct.toFixed(1)}% of income · target ${SPEND_TARGET_PCT}%`;
+      const fill = document.getElementById("homeMeterFill");
+      fill.style.width = Math.min(pct, 100) + "%";
+      fill.classList.toggle("over", pct > SPEND_TARGET_PCT);
+      document.getElementById("homeMeterTarget").style.left = SPEND_TARGET_PCT + "%";
+    } else {
+      block.classList.add("hidden");
+    }
+
+    const recent = state.data.slice()
+      .sort((x, y) => (x.date < y.date ? 1 : x.date > y.date ? -1 : 0))
+      .slice(0, 6);
+    document.getElementById("homeEmpty").classList.toggle("hidden", recent.length > 0);
+    document.getElementById("homeRecent").innerHTML = recent.map((e) => `
+      <button type="button" class="recent-item" data-id="${e.id}">
+        <span class="recent-main">
+          <strong>${escapeHtml(displayCategory(e))}</strong>
+          <span class="recent-sub">${e.date}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
+        </span>
+        <span class="amount-${e.type}">${e.type === "income" ? "+" : ""}${fmtMoney(e.amount)}</span>
+      </button>`).join("");
+  }
+
+  document.getElementById("homeRecent").addEventListener("click", (ev) => {
+    const row = ev.target.closest("[data-id]");
+    if (!row || isCurrentTrackClosed()) return;
+    const rec = state.data.find((e) => e.id === row.dataset.id);
+    if (rec) enterEditMode(rec);
+  });
+
+  document.getElementById("homeSeeAllBtn").addEventListener("click", () => showTab("transactions"));
 
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
     window.addEventListener("load", () => {

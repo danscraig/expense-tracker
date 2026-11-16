@@ -19,7 +19,6 @@
 
   <header class="topbar">
     <h1>Expense Tracker</h1>
-    <button id="logoutBtn" class="btn btn-ghost hidden">Log Out</button>
   </header>
 
   <section id="authScreen" class="panel auth-panel hidden">
@@ -67,70 +66,42 @@
   </div>
 
   <nav class="tabs" role="tablist" aria-label="Sections">
-    <button type="button" class="tab-btn active" role="tab" aria-selected="true" data-tab="add"><span class="tab-long">Add Expense</span><span class="tab-short">Add</span></button>
-    <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="dashboard">Dashboard</button>
-    <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="transactions">Transactions</button>
-    <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="tools">Tools</button>
+    <button type="button" class="tab-btn active" role="tab" aria-selected="true" data-tab="home"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/></svg><span>Home</span></button>
+    <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="transactions"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Transactions</span></button>
+    <button type="button" class="tab-fab" id="addFab" aria-label="Add expense"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="analytics"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg><span>Analytics</span></button>
+    <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="settings"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span>Settings</span></button>
   </nav>
 
   <main class="tab-panes">
 
-  <div id="tab-add" class="tab-pane" role="tabpanel">
-    <section class="panel form-panel">
-      <h2 id="formTitle">Add Expense</h2>
-      <p id="closedTrackBanner" class="closed-banner">This track is closed. Reopen it to make changes.</p>
-      <form id="expenseForm">
-        <input type="hidden" id="expenseId">
-
-        <div class="field-row">
-          <label for="amount">Amount (€)</label>
-          <input type="number" id="amount" step="0.01" min="0" required placeholder="0.00">
-        </div>
-
-        <div class="field-row" id="categoryRow">
-          <label for="category">Category</label>
-          <select id="category" required>
-            <option value="" disabled selected>Select a category</option>
-          </select>
-        </div>
-
-        <div class="field-row hidden" id="subcategoryRow">
-          <label for="subcategory" id="subcategoryLabel">Subcategory</label>
-          <select id="subcategory"></select>
-        </div>
-
-        <div class="field-row">
-          <label for="date">Date</label>
-          <input type="date" id="date" required>
-        </div>
-
-        <div class="field-row">
-          <label for="note">Note</label>
-          <input type="text" id="note" placeholder="Optional description">
-        </div>
-
-        <div class="field-row">
-          <label for="type">Type</label>
-          <select id="type">
-            <option value="expense" selected>Expense</option>
-            <option value="income">Income</option>
-            <option value="investment">Investment</option>
-          </select>
-        </div>
-
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary" id="submitBtn">Add Expense</button>
-          <button type="button" class="btn btn-ghost hidden" id="cancelEditBtn">Cancel</button>
-        </div>
-      </form>
-      <button type="button" class="btn btn-tool btn-tool-primary btn-block" id="recurringBtn">Monthly Transactions</button>
+  <div id="tab-home" class="tab-pane" role="tabpanel">
+    <section class="panel home-panel">
+      <p class="home-month" id="homeMonth"></p>
+      <div class="home-cards">
+        <div class="stat-card"><span class="stat-label">Spent</span><span class="stat-value" id="homeSpent">€0.00</span></div>
+        <div class="stat-card"><span class="stat-label">Income</span><span class="stat-value" id="homeIncome">€0.00</span></div>
+        <div class="stat-card"><span class="stat-label">Savings</span><span class="stat-value" id="homeSavings">€0.00</span></div>
+      </div>
+      <div class="meter-block" id="homeMeterBlock">
+        <div class="meter-head"><span id="homeMeterText"></span></div>
+        <div class="meter" aria-hidden="true"><div class="meter-fill" id="homeMeterFill"></div><div class="meter-target" id="homeMeterTarget"></div></div>
+      </div>
+    </section>
+    <section class="panel home-panel home-recent">
+      <div class="table-header">
+        <h2>Recent transactions</h2>
+        <button type="button" class="btn btn-ghost" id="homeSeeAllBtn">See all</button>
+      </div>
+      <div id="homeRecent" class="recent-list"></div>
+      <p class="empty-note hidden" id="homeEmpty">No transactions yet. Tap + to add the first one.</p>
     </section>
   </div>
 
-  <div id="tab-dashboard" class="tab-pane hidden" role="tabpanel">
+  <div id="tab-analytics" class="tab-pane hidden" role="tabpanel">
     <section class="panel dashboard-panel">
       <div class="table-header">
-        <h2>Dashboard</h2>
+        <h2>Analytics</h2>
         <div class="table-filters">
           <select id="rangeSelect" aria-label="Range">
             <option value="all">All time</option>
@@ -251,9 +222,9 @@
     </section>
   </div>
 
-  <div id="tab-tools" class="tab-pane hidden" role="tabpanel">
-    <section class="panel tools-panel">
-      <h2>Tools</h2>
+  <div id="tab-settings" class="tab-pane hidden" role="tabpanel">
+    <section class="panel tools-panel settings-panel">
+      <h2>Data</h2>
       <p class="tools-note">Import, export and restore apply to the track selected above.</p>
       <div class="tools-list">
         <div class="tool-row">
@@ -278,10 +249,84 @@
         <input type="file" id="importInput" accept=".xlsx,.xls" hidden>
       </div>
     </section>
+
+    <section class="panel settings-panel">
+      <h2>Monthly transactions</h2>
+      <p class="tools-note">Rules that add a transaction to General every month (salary, subscriptions, investments).</p>
+      <button type="button" class="btn btn-tool btn-tool-primary" id="recurringBtn">Monthly Transactions</button>
+    </section>
+
+    <section class="panel settings-panel">
+      <h2>Backup</h2>
+      <p class="tools-note" id="settingsBackup">Last backup: —</p>
+      <p class="tools-note">Export your General track (JSON or Excel) from the Data section to keep a copy.</p>
+    </section>
+
+    <section class="panel settings-panel">
+      <h2>Account</h2>
+      <p class="tools-note" id="settingsEmail"></p>
+      <button id="logoutBtn" class="btn btn-ghost hidden">Log Out</button>
+    </section>
   </div>
 
   </main>
   </div><!-- #appContent -->
+</div>
+
+<div id="expenseModal" class="modal hidden">
+  <div class="modal-content expense-content">
+    <div class="modal-header">
+      <h2 id="formTitle">Add Expense</h2>
+      <button type="button" class="modal-close" id="expenseCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="closedTrackBanner" class="closed-banner">This track is closed. Reopen it to make changes.</p>
+      <form id="expenseForm">
+        <input type="hidden" id="expenseId">
+
+        <div class="field-row">
+          <label for="amount">Amount (€)</label>
+          <input type="number" id="amount" step="0.01" min="0" required placeholder="0.00">
+        </div>
+
+        <div class="field-row" id="categoryRow">
+          <label for="category">Category</label>
+          <select id="category" required>
+            <option value="" disabled selected>Select a category</option>
+          </select>
+        </div>
+
+        <div class="field-row hidden" id="subcategoryRow">
+          <label for="subcategory" id="subcategoryLabel">Subcategory</label>
+          <select id="subcategory"></select>
+        </div>
+
+        <div class="field-row">
+          <label for="date">Date</label>
+          <input type="date" id="date" required>
+        </div>
+
+        <div class="field-row">
+          <label for="note">Note</label>
+          <input type="text" id="note" placeholder="Optional description">
+        </div>
+
+        <div class="field-row">
+          <label for="type">Type</label>
+          <select id="type">
+            <option value="expense" selected>Expense</option>
+            <option value="income">Income</option>
+            <option value="investment">Investment</option>
+          </select>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="submitBtn">Add Expense</button>
+          <button type="button" class="btn btn-ghost hidden" id="cancelEditBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 <div id="importModal" class="modal hidden">
