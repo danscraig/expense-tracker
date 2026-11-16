@@ -59,6 +59,8 @@
       Track:
       <select id="trackSelect"></select>
     </label>
+    <span id="trackMainLabel" class="track-main hidden"></span>
+    <button id="trackCatsBtn" class="btn btn-tool btn-tool-primary hidden">Subcategories</button>
     <button id="closeTrackBtn" class="btn btn-tool btn-tool-rose hidden">Close Track</button>
     <button id="reopenTrackBtn" class="btn btn-tool btn-tool-invest hidden">Reopen Track</button>
     <button id="deleteTrackBtn" class="btn btn-tool btn-tool-danger hidden">Delete Track</button>
@@ -85,11 +87,16 @@
           <input type="number" id="amount" step="0.01" min="0" required placeholder="0.00">
         </div>
 
-        <div class="field-row">
+        <div class="field-row" id="categoryRow">
           <label for="category">Category</label>
           <select id="category" required>
             <option value="" disabled selected>Select a category</option>
           </select>
+        </div>
+
+        <div class="field-row hidden" id="subcategoryRow">
+          <label for="subcategory" id="subcategoryLabel">Subcategory</label>
+          <select id="subcategory"></select>
         </div>
 
         <div class="field-row">
@@ -108,13 +115,6 @@
             <option value="expense" selected>Expense</option>
             <option value="income">Income</option>
             <option value="investment">Investment</option>
-          </select>
-        </div>
-
-        <div class="field-row">
-          <label for="account">Account</label>
-          <select id="account">
-            <option value="" disabled selected>Select an account</option>
           </select>
         </div>
 
@@ -200,6 +200,11 @@
           <canvas id="timeChart" title="Double-click a point to see its transactions"></canvas>
           <p class="empty-note hidden" id="timeEmpty">No expense data in this range.</p>
         </div>
+        <div class="chart-box chart-box-wide">
+          <h3>Spent of Income by Month <span class="chart-sub">(all months · target 60%)</span></h3>
+          <canvas id="pctChart"></canvas>
+          <p class="empty-note hidden" id="pctEmpty">No income recorded yet, so there is no percentage to show.</p>
+        </div>
       </div>
     </section>
   </div>
@@ -235,7 +240,6 @@
               <th data-sort="amount">Amount</th>
               <th data-sort="category">Category</th>
               <th data-sort="type">Type</th>
-              <th data-sort="account">Account</th>
               <th>Note</th>
               <th>Actions</th>
             </tr>
@@ -325,11 +329,6 @@
             <option value="" disabled selected>Select a category</option>
           </select>
         </label>
-        <label>Account
-          <select id="recAccount">
-            <option value="Novo Banco" selected>Novo Banco</option>
-          </select>
-        </label>
         <label>Day of month
           <input type="number" id="recDay" min="1" max="31" step="1" required placeholder="1-31">
         </label>
@@ -362,6 +361,39 @@
       <ul id="recurringList" class="recurring-list"></ul>
       <p class="empty-note hidden" id="recurringEmpty">No monthly transactions yet.</p>
     </div>
+  </div>
+</div>
+
+<div id="newTrackModal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>New Track</h2>
+      <button type="button" class="modal-close" id="newTrackCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <form id="newTrackForm">
+      <div class="field-row">
+        <label for="newTrackName">Name</label>
+        <input type="text" id="newTrackName" required placeholder='e.g. "Paris Expenses"'>
+      </div>
+      <div class="field-row">
+        <label for="newTrackCategory">Main category</label>
+        <select id="newTrackCategory" required></select>
+        <span class="tool-desc">This is the category its transactions get in General when the track is closed.</span>
+      </div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary" id="newTrackCreateBtn">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="trackCatsModal" class="modal hidden">
+  <div class="modal-content recurring-content">
+    <div class="modal-header">
+      <h2 id="trackCatsTitle">Subcategories</h2>
+      <button type="button" class="modal-close" id="trackCatsCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body" id="trackCatsBody"></div>
   </div>
 </div>
 

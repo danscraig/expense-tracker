@@ -1,4 +1,4 @@
-const CACHE_NAME = "expense-tracker-v18";
+const CACHE_NAME = "expense-tracker-v20";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -32,7 +32,7 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
-  // Never intercept cross-origin calls (e.g. the Supabase API) Ã¢â‚¬â€ this cache
+  // Never intercept cross-origin calls (e.g. the Supabase API) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â this cache
   // strategy is only for this app's own static shell. Caching dynamic,
   // per-user API responses here would silently serve stale data forever.
   if (new URL(event.request.url).origin !== self.location.origin) return;

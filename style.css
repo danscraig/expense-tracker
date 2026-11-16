@@ -355,6 +355,8 @@ input[type="month"]::-webkit-date-and-time-value { text-align: left; min-height:
 }
 
 .chart-box canvas { max-height: 220px; }
+.chart-box-wide { grid-column: 1 / -1; }
+.chart-sub { font-size: 12px; font-weight: 400; color: var(--text-muted); }
 
 .empty-note { color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px 0; }
 .empty-note.hidden { display: none; }
@@ -583,3 +585,9 @@ body:has(.modal:not(.hidden)) { overflow: hidden; }
 .toast-action.hidden { display: none; }
 
 .hidden { display: none !important; }
+
+/* ---------- track main category / subcategories ---------- */
+.track-main { font-size: 13px; color: var(--text-muted); align-self: center; }
+.sub-add-form { display: flex; gap: 8px; margin-top: 14px; }
+.sub-add-form input { flex: 1; min-width: 0; }
+.sub-hint { font-size: 13px; color: var(--text-muted); margin: 0 0 8px; }

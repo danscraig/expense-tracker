@@ -13,7 +13,6 @@
     "Shein", "Subscrições", "Supermercado", "Tecnologia", "Transportes",
     "Unhas", "Viagens"
   ];
-  const PRESET_ACCOUNTS = ["Novo Banco", "Trading 212", "Revolut", "General"];
 
   const state = {
     session: null,
@@ -117,19 +116,50 @@
       date: row.date,
       note: row.note || "",
       type: row.type,
-      account: row.account || "",
+      subcategory: row.subcategory || "",
       recurring: !!row.recurring_id,
     };
   }
 
-  // ---------- categories / accounts datalists ----------
+  // ---------- track main category / subcategories ----------
+  // A non-General track with a main category has ONE category (the main one) for all its
+  // transactions, which is also what reaches General when it is closed. Inside the track
+  // the user splits it further with subcategories, which never leave the track.
+
+  const NO_SUB = "(no subcategory)";
+
+  function trackUsesSubs() {
+    const t = state.tracks.find((x) => x.id === state.currentTrackId);
+    return !!t && !t.is_general && !!t.main_category;
+  }
+
+  // The category shown in the table, filters and charts of the current track.
+  function displayCategory(e) {
+    return trackUsesSubs() ? (e.subcategory || NO_SUB) : e.category;
+  }
+
+  // Registers subcategory names that came from an import / restore in the track's own list.
+  async function addMissingSubcategories(track, names) {
+    const have = new Set((track.subcategories || []).map(normalize));
+    const added = [];
+    names.forEach((n) => {
+      if (n && !have.has(normalize(n))) { have.add(normalize(n)); added.push(n); }
+    });
+    if (added.length) await saveTrackFields(track, { subcategories: [...(track.subcategories || []), ...added] });
+  }
+
+  async function saveTrackFields(track, fields) {
+    const { data, error } = await sb.from("tracks").update(fields).eq("id", track.id).select().single();
+    if (error) throw error;
+    Object.assign(track, data);
+  }
+
+  // ---------- category dropdowns ----------
 
   function refreshDatalists() {
     const cats = new Set(PRESET_CATEGORIES);
-    const accs = new Set(PRESET_ACCOUNTS);
     state.data.forEach((e) => {
       if (e.category) cats.add(e.category);
-      if (e.account) accs.add(e.account);
     });
     const sortedCats = [...cats].sort();
 
@@ -141,22 +171,20 @@
       `<option value="__new__">+ Add new category…</option>`;
     if (sortedCats.includes(currentCategoryValue)) categorySelectEl.value = currentCategoryValue;
 
-    const sortedAccs = [...accs].sort();
-    const accountSelectEl = document.getElementById("account");
-    const currentAccountValue = accountSelectEl.value;
-    const defaultAccountValue = currentAccountValue || "Novo Banco";
-    accountSelectEl.innerHTML =
-      `<option value="" disabled>Select an account</option>` +
-      sortedAccs.map((a) => `<option value="${escapeHtml(a)}"${a === defaultAccountValue ? " selected" : ""}>${escapeHtml(a)}</option>`).join("") +
-      `<option value="__new__">+ Add new account…</option>`;
-    if (sortedAccs.includes(defaultAccountValue)) accountSelectEl.value = defaultAccountValue;
+    // In a track with a main category the filters list its subcategories instead.
+    let filterCats = sortedCats;
+    if (trackUsesSubs()) {
+      const subs = new Set(currentTrack().subcategories || []);
+      state.data.forEach((e) => subs.add(e.subcategory || NO_SUB));
+      filterCats = [...subs].sort();
+    }
+    if (!filterCats.includes(state.categoryFilterValue)) state.categoryFilterValue = "";
 
     const categoryFilterEl = document.getElementById("categoryFilter");
-    const currentFilterValue = categoryFilterEl.value;
     categoryFilterEl.innerHTML =
       `<option value="">All Categories</option>` +
-      sortedCats.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
-    categoryFilterEl.value = sortedCats.includes(currentFilterValue) ? currentFilterValue : "";
+      filterCats.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+    categoryFilterEl.value = state.categoryFilterValue;
 
     // The Dashboard's category filter shows the same options and shares the
     // same setting as the one above the transactions table.
@@ -312,9 +340,36 @@
     updateTrackControls();
   }
 
+  const trackMainLabel = document.getElementById("trackMainLabel");
+  const trackCatsBtn = document.getElementById("trackCatsBtn");
+
+  // Add Expense form: in a track with a main category the category is fixed and a
+  // subcategory dropdown (the track's own list) takes its place.
+  function updateFormForTrack() {
+    const uses = trackUsesSubs();
+    document.getElementById("categoryRow").classList.toggle("hidden", uses);
+    document.getElementById("category").required = !uses;
+    document.getElementById("subcategoryRow").classList.toggle("hidden", !uses);
+    if (!uses) return;
+    const track = currentTrack();
+    document.getElementById("subcategoryLabel").textContent = `Subcategory · ${track.main_category}`;
+    const sel = document.getElementById("subcategory");
+    const current = sel.value;
+    const subs = [...(track.subcategories || [])].sort();
+    sel.innerHTML = `<option value="">No subcategory</option>` +
+      subs.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+    sel.value = subs.includes(current) ? current : "";
+  }
+
   function updateTrackControls() {
     const track = currentTrack();
     const isClosed = !!track && track.status === "closed";
+    const uses = trackUsesSubs();
+    trackMainLabel.textContent = uses ? `Main category: ${track.main_category}` : "";
+    trackMainLabel.classList.toggle("hidden", !uses);
+    trackCatsBtn.textContent = uses ? "Subcategories" : "Set main category";
+    trackCatsBtn.classList.toggle("hidden", !track || track.is_general);
+    updateFormForTrack();
     closeTrackBtn.classList.toggle("hidden", !track || track.is_general || isClosed);
     reopenTrackBtn.classList.toggle("hidden", !track || track.is_general || !isClosed);
     deleteTrackBtn.classList.toggle("hidden", !track || track.is_general);
@@ -323,29 +378,198 @@
 
   trackSelect.addEventListener("change", async () => {
     if (trackSelect.value === "__new__") {
-      const name = (prompt('Name this track (e.g. "Paris Expenses"):') || "").trim();
       trackSelect.value = state.currentTrackId;
-      if (!name) return;
-      try {
-        const { data, error } = await sb.from("tracks")
-          .insert({ name, is_general: false, status: "open", user_id: state.session.user.id })
-          .select().single();
-        if (error) throw error;
-        state.tracks.push(data);
-        await switchTrack(data.id);
-        renderTrackSelect();
-        toast(`Track "${name}" created.`);
-      } catch (err) {
-        toast("Could not create track: " + err.message);
-      }
+      openNewTrackModal();
       return;
     }
     await switchTrack(trackSelect.value);
   });
 
+  // ---- new track (name + main category) ----
+
+  const newTrackModal = document.getElementById("newTrackModal");
+  const newTrackForm = document.getElementById("newTrackForm");
+  const newTrackName = document.getElementById("newTrackName");
+  const newTrackCategory = document.getElementById("newTrackCategory");
+
+  function fillMainCategorySelect(select, selected) {
+    const cats = new Set(PRESET_CATEGORIES);
+    state.tracks.forEach((t) => { if (t.main_category) cats.add(t.main_category); });
+    if (selected) cats.add(selected);
+    select.innerHTML = `<option value="" disabled>Select a category</option>` +
+      [...cats].sort().map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("") +
+      `<option value="__new__">+ Add new category…</option>`;
+    select.value = selected || "";
+    select.dataset.last = select.value;
+  }
+
+  function wireNewCategoryOption(select) {
+    select.addEventListener("change", () => {
+      if (select.value === "__new__") {
+        const name = (prompt("New category name:") || "").trim();
+        if (!name) { select.value = select.dataset.last || ""; return; }
+        fillMainCategorySelect(select, name);
+      }
+      select.dataset.last = select.value;
+    });
+  }
+  wireNewCategoryOption(newTrackCategory);
+
+  function openNewTrackModal() {
+    newTrackForm.reset();
+    fillMainCategorySelect(newTrackCategory, "");
+    newTrackModal.classList.remove("hidden");
+    newTrackName.focus();
+  }
+
+  document.getElementById("newTrackCloseBtn").addEventListener("click", () => newTrackModal.classList.add("hidden"));
+
+  newTrackForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = newTrackName.value.trim();
+    const main = newTrackCategory.value;
+    if (!name || !main || main === "__new__") { toast("Please fill in the name and the main category."); return; }
+    const btn = document.getElementById("newTrackCreateBtn");
+    btn.disabled = true;
+    try {
+      const { data, error } = await sb.from("tracks")
+        .insert({ name, is_general: false, status: "open", user_id: state.session.user.id, main_category: main, subcategories: [] })
+        .select().single();
+      if (error) throw error;
+      state.tracks.push(data);
+      newTrackModal.classList.add("hidden");
+      await switchTrack(data.id);
+      renderTrackSelect();
+      toast(`Track "${name}" created.`);
+    } catch (err) {
+      toast("Could not create track: " + err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ---- subcategories of the current track (add / delete) ----
+
+  const trackCatsModal = document.getElementById("trackCatsModal");
+  const trackCatsBody = document.getElementById("trackCatsBody");
+
+  function renderTrackCats() {
+    const track = currentTrack();
+    if (!track || track.is_general) return;
+    const closed = track.status === "closed";
+    document.getElementById("trackCatsTitle").textContent = track.main_category ? "Subcategories" : "Main category";
+
+    if (!track.main_category) {
+      trackCatsBody.innerHTML = closed
+        ? `<p class="sub-hint">Reopen this track to set its main category.</p>`
+        : `<p class="sub-hint">Pick the main category of "${escapeHtml(track.name)}". Its transactions will all get this category (and it is the one that reaches General when the track is closed). The categories they have now become subcategories of this track.</p>
+           <div class="field-row"><select id="setMainSelect"></select></div>
+           <div class="modal-actions"><button type="button" class="btn btn-primary" id="setMainBtn">Set main category</button></div>`;
+      if (!closed) {
+        const sel = document.getElementById("setMainSelect");
+        fillMainCategorySelect(sel, "");
+        wireNewCategoryOption(sel);
+      }
+      return;
+    }
+
+    const counts = {};
+    state.data.forEach((e) => { if (e.subcategory) counts[e.subcategory] = (counts[e.subcategory] || 0) + 1; });
+    const subs = [...(track.subcategories || [])].sort();
+    trackCatsBody.innerHTML =
+      `<p class="sub-hint">Main category: <strong>${escapeHtml(track.main_category)}</strong>. Subcategories stay inside this track${closed ? " (closed, read-only)" : ""}.</p>` +
+      (subs.length
+        ? `<ul class="recurring-list">${subs.map((s) => `<li class="recurring-item">
+            <span class="recurring-main"><span>${escapeHtml(s)}</span><span class="recurring-sub">${counts[s] || 0} transaction${(counts[s] || 0) === 1 ? "" : "s"}</span></span>
+            ${closed ? "" : `<span class="recurring-actions"><button type="button" class="btn btn-danger" data-del-sub="${escapeHtml(s)}">Delete</button></span>`}
+          </li>`).join("")}</ul>`
+        : `<p class="empty-note">No subcategories yet.</p>`) +
+      (closed ? "" : `<form class="sub-add-form" id="subAddForm"><input type="text" id="subAddInput" placeholder="New subcategory" required><button type="submit" class="btn btn-primary">Add</button></form>`);
+  }
+
+  trackCatsBtn.addEventListener("click", () => {
+    renderTrackCats();
+    trackCatsModal.classList.remove("hidden");
+  });
+  document.getElementById("trackCatsCloseBtn").addEventListener("click", () => trackCatsModal.classList.add("hidden"));
+
+  trackCatsBody.addEventListener("submit", async (e) => {
+    if (e.target.id !== "subAddForm") return;
+    e.preventDefault();
+    const track = currentTrack();
+    if (!track || track.status === "closed") return;
+    const input = document.getElementById("subAddInput");
+    const name = input.value.trim();
+    if (!name) return;
+    const subs = track.subcategories || [];
+    if (subs.some((s) => normalize(s) === normalize(name))) { toast(`"${name}" already exists.`); return; }
+    try {
+      await saveTrackFields(track, { subcategories: [...subs, name] });
+      renderTrackCats();
+      updateFormForTrack();
+      refreshDatalists();
+    } catch (err) {
+      toast("Could not add subcategory: " + err.message);
+    }
+  });
+
+  trackCatsBody.addEventListener("click", async (e) => {
+    const track = currentTrack();
+    if (!track || track.is_general || track.status === "closed") return;
+
+    const delBtn = e.target.closest("[data-del-sub]");
+    if (delBtn) {
+      const name = delBtn.dataset.delSub;
+      const n = state.data.filter((x) => x.subcategory === name).length;
+      if (!confirm(`Delete subcategory "${name}"?` + (n ? ` Its ${n} transaction${n === 1 ? "" : "s"} will stay in the track with no subcategory.` : ""))) return;
+      try {
+        if (n) {
+          const { error } = await sb.from("expenses").update({ subcategory: null }).eq("track_id", track.id).eq("subcategory", name);
+          if (error) throw error;
+        }
+        await saveTrackFields(track, { subcategories: (track.subcategories || []).filter((s) => s !== name) });
+        await refreshCurrentTrackData();
+        renderAll();
+        updateFormForTrack();
+        renderTrackCats();
+        toast(`Subcategory "${name}" deleted.`);
+      } catch (err) {
+        toast("Could not delete subcategory: " + err.message);
+      }
+      return;
+    }
+
+    if (e.target.id === "setMainBtn") {
+      const main = document.getElementById("setMainSelect").value;
+      if (!main || main === "__new__") { toast("Pick a main category first."); return; }
+      try {
+        // Every current category of the track becomes a subcategory; all its
+        // transactions then carry the main category.
+        const idsByCat = {};
+        state.data.forEach((x) => { if (x.category && x.category !== main) (idsByCat[x.category] = idsByCat[x.category] || []).push(x.id); });
+        for (const [cat, ids] of Object.entries(idsByCat)) {
+          for (let i = 0; i < ids.length; i += 100) {
+            const { error } = await sb.from("expenses").update({ subcategory: cat, category: main }).in("id", ids.slice(i, i + 100));
+            if (error) throw error;
+          }
+        }
+        const subs = [...new Set([...(track.subcategories || []), ...Object.keys(idsByCat)])];
+        await saveTrackFields(track, { main_category: main, subcategories: subs });
+        await refreshCurrentTrackData();
+        renderAll();
+        updateTrackControls();
+        renderTrackCats();
+        toast(`Main category set to "${main}".`);
+      } catch (err) {
+        toast("Could not set main category: " + err.message);
+      }
+    }
+  });
+
   async function switchTrack(id) {
     if (state.editId) exitEditMode();
     state.currentTrackId = id;
+    state.categoryFilterValue = "";
     localStorage.setItem(LAST_TRACK_KEY, id);
     try {
       await refreshCurrentTrackData();
@@ -397,6 +621,7 @@
     if (state.editId) exitEditMode();
     state.tracks.splice(trackIndex, 1);
     state.currentTrackId = generalTrack.id;
+    state.categoryFilterValue = "";
     localStorage.setItem(LAST_TRACK_KEY, generalTrack.id);
     renderTrackSelect();
     refreshCurrentTrackData().then(renderAll).catch((err) => toast("Could not load track data: " + err.message));
@@ -450,7 +675,7 @@
     try {
       const rows = legacy.map((e) => ({
         amount: e.amount, category: e.category, date: e.date,
-        note: e.note || "", type: e.type || "expense", account: e.account || "",
+        note: e.note || "", type: e.type || "expense",
       }));
       const { data: importedCount, error } = await sb.rpc("import_legacy_data", { p_rows: rows });
       if (error) throw error;
@@ -490,25 +715,6 @@
     lastCategoryValue = categorySelect.value;
   });
 
-  const accountSelect = document.getElementById("account");
-  let lastAccountValue = "Novo Banco";
-
-  accountSelect.addEventListener("change", () => {
-    if (accountSelect.value === "__new__") {
-      const name = (prompt("New account name:") || "").trim();
-      if (!name) {
-        accountSelect.value = lastAccountValue;
-        return;
-      }
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      accountSelect.insertBefore(opt, accountSelect.querySelector('option[value="__new__"]'));
-      accountSelect.value = name;
-    }
-    lastAccountValue = accountSelect.value;
-  });
-
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (isCurrentTrackClosed()) {
@@ -516,11 +722,12 @@
       return;
     }
     const amount = parseFloat(document.getElementById("amount").value);
-    const category = document.getElementById("category").value.trim();
+    const uses = trackUsesSubs();
+    const category = uses ? currentTrack().main_category : document.getElementById("category").value.trim();
+    const subcategory = uses ? (document.getElementById("subcategory").value || null) : null;
     const date = document.getElementById("date").value;
     const note = document.getElementById("note").value.trim();
     const type = document.getElementById("type").value;
-    const account = document.getElementById("account").value.trim();
 
     if (!amount || amount <= 0 || !category || !date) {
       toast("Please fill in amount, category and date.");
@@ -531,7 +738,7 @@
     try {
       if (state.editId) {
         const { data, error } = await sb.from("expenses")
-          .update({ amount, category, date, note, type, account })
+          .update({ amount, category, date, note, type, ...(uses ? { subcategory } : {}) })
           .eq("id", state.editId)
           .select().single();
         if (error) throw error;
@@ -540,7 +747,7 @@
         toast("Expense updated.");
       } else {
         const { data, error } = await sb.from("expenses")
-          .insert({ amount, category, date, note, type, account, track_id: state.currentTrackId, user_id: state.session.user.id })
+          .insert({ amount, category, date, note, type, ...(uses ? { subcategory } : {}), track_id: state.currentTrackId, user_id: state.session.user.id })
           .select().single();
         if (error) throw error;
         state.data.push(fromDbRow(data));
@@ -566,11 +773,10 @@
     document.getElementById("amount").value = rec.amount;
     document.getElementById("category").value = rec.category;
     lastCategoryValue = rec.category;
+    if (trackUsesSubs()) document.getElementById("subcategory").value = rec.subcategory || "";
     document.getElementById("date").value = rec.date;
     document.getElementById("note").value = rec.note || "";
     document.getElementById("type").value = rec.type || "expense";
-    document.getElementById("account").value = rec.account || "";
-    lastAccountValue = rec.account || "";
     formTitle.textContent = "Edit Expense";
     submitBtn.textContent = "Save Changes";
     cancelEditBtn.classList.remove("hidden");
@@ -582,9 +788,7 @@
     form.reset();
     document.getElementById("date").value = todayISO();
     document.getElementById("type").value = "expense";
-    document.getElementById("account").value = "Novo Banco";
     lastCategoryValue = "";
-    lastAccountValue = "Novo Banco";
     formTitle.textContent = "Add Expense";
     submitBtn.textContent = "Add Expense";
     cancelEditBtn.classList.add("hidden");
@@ -723,6 +927,8 @@
 
   let categoryChart = null;
   let timeChart = null;
+  let pctChart = null;
+  const SPEND_TARGET_PCT = 60;
 
   // "Accessible Orchid" data colors, taken from the theme used in 2026.pbix
   const BASE_PALETTE = ["#364B59", "#C480A7", "#663466", "#6E98B5", "#67002E", "#5D8099", "#3F213F", "#EC64A9"];
@@ -743,7 +949,7 @@
   }
 
   function matchesFilters(e) {
-    return (!state.categoryFilterValue || e.category === state.categoryFilterValue) &&
+    return (!state.categoryFilterValue || displayCategory(e) === state.categoryFilterValue) &&
       (!state.typeFilterValue || e.type === state.typeFilterValue) &&
       (!state.sourceFilterValue || e.recurring === (state.sourceFilterValue === "recurring"));
   }
@@ -769,6 +975,83 @@
 
     renderCategoryChart(expenses);
     renderTimeChart(expenses);
+    renderPctChart();
+  }
+
+  // Expenses as a share of income, month by month. Uses every month of the track
+  // (ignores the range and filters above, since a trend needs more than one month).
+  function renderPctChart() {
+    const ctx = document.getElementById("pctChart");
+    const emptyNote = document.getElementById("pctEmpty");
+    if (pctChart) { pctChart.destroy(); pctChart = null; }
+
+    const byMonth = {};
+    state.data.forEach((e) => {
+      const m = e.date.slice(0, 7);
+      const x = byMonth[m] || (byMonth[m] = { income: 0, expense: 0 });
+      if (e.type === "income") x.income += e.amount;
+      else if (e.type === "expense") x.expense += e.amount;
+    });
+    const months = Object.keys(byMonth).sort();
+    if (!months.some((m) => byMonth[m].income > 0)) {
+      ctx.classList.add("hidden");
+      emptyNote.classList.remove("hidden");
+      return;
+    }
+    ctx.classList.remove("hidden");
+    emptyNote.classList.add("hidden");
+
+    const labels = [];
+    for (let m = months[0]; m <= months[months.length - 1]; m = shiftMonth(m, 1)) labels.push(m);
+    const pct = labels.map((m) => {
+      const x = byMonth[m];
+      return x && x.income > 0 ? Math.round(x.expense / x.income * 1000) / 10 : null;
+    });
+
+    pctChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Spent of income",
+            data: pct,
+            borderColor: "#364B59",
+            backgroundColor: "#364B59",
+            pointBackgroundColor: pct.map((v) => (v != null && v > SPEND_TARGET_PCT ? "#bd3978" : "#364B59")),
+            pointRadius: 4,
+            tension: 0.25,
+          },
+          {
+            label: `Target ${SPEND_TARGET_PCT}%`,
+            data: labels.map(() => SPEND_TARGET_PCT),
+            borderColor: "#6e98b5",
+            borderDash: [6, 6],
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHitRadius: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (c) => {
+                if (c.datasetIndex === 1) return c.dataset.label;
+                const x = byMonth[labels[c.dataIndex]];
+                return `Spent ${c.parsed.y.toFixed(1)}% (${fmtMoney(x.expense)} of ${fmtMoney(x.income)})`;
+              },
+            },
+          },
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { callback: (v) => v + "%" } },
+        },
+      },
+    });
   }
 
   // ---------- chart drill-down: double-click a slice / point to list its transactions ----------
@@ -787,8 +1070,8 @@
       .map((e) => `
         <li class="recurring-item">
           <span class="recurring-main">
-            <span>${escapeHtml(e.category)}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
-            <span class="recurring-sub">${e.date}${e.account ? " · " + escapeHtml(e.account) : ""}${e.recurring ? " · ↻ monthly" : ""}</span>
+            <span>${escapeHtml(displayCategory(e))}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
+            <span class="recurring-sub">${e.date}${e.recurring ? " · ↻ monthly" : ""}</span>
           </span>
           <strong class="amount-${e.type}">${fmtMoney(e.amount)}</strong>
         </li>`)
@@ -805,7 +1088,7 @@
     const hit = categoryChart.getElementsAtEventForMode(ev, "nearest", { intersect: true }, true)[0];
     if (!hit) return;
     const cat = categoryChart.data.labels[hit.index];
-    showChartDetail(cat, drill.category.filter((e) => e.category === cat));
+    showChartDetail(cat, drill.category.filter((e) => displayCategory(e) === cat));
   });
 
   document.getElementById("timeChart").addEventListener("dblclick", (ev) => {
@@ -822,7 +1105,7 @@
     const emptyNote = document.getElementById("categoryEmpty");
 
     const totals = {};
-    expenses.forEach((e) => { totals[e.category] = (totals[e.category] || 0) + e.amount; });
+    expenses.forEach((e) => { const c = displayCategory(e); totals[c] = (totals[c] || 0) + e.amount; });
     const labels = Object.keys(totals).sort((a, b) => totals[b] - totals[a]);
 
     if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
@@ -1004,13 +1287,14 @@
   function renderTable() {
     const q = normalize(state.search);
     let rows = state.data.filter((e) =>
-      (!q || normalize(e.note).includes(q) || normalize(e.category).includes(q)) &&
+      (!q || normalize(e.note).includes(q) || normalize(displayCategory(e)).includes(q)) &&
       matchesFilters(e)
     );
 
     const { key, dir } = state.sort;
     rows = rows.slice().sort((a, b) => {
-      let av = a[key], bv = b[key];
+      let av = key === "category" ? displayCategory(a) : a[key];
+      let bv = key === "category" ? displayCategory(b) : b[key];
       if (key === "amount") { av = Number(av); bv = Number(bv); }
       else { av = (av || "").toString().toLowerCase(); bv = (bv || "").toString().toLowerCase(); }
       if (av < bv) return dir === "asc" ? -1 : 1;
@@ -1029,9 +1313,8 @@
       <tr>
         <td data-label="Date">${e.date}</td>
         <td class="amount-${e.type}" data-label="Amount">${fmtMoney(e.amount)}</td>
-        <td data-label="Category">${escapeHtml(e.category)}</td>
+        <td data-label="Category">${escapeHtml(displayCategory(e))}</td>
         <td data-label="Type">${e.recurring ? `<span class="recurring-badge" title="Created automatically by a monthly transaction">↻ monthly</span>` : ""}<span class="type-badge ${e.type}">${e.type}</span></td>
-        <td data-label="Account">${escapeHtml(e.account || "")}</td>
         <td data-label="Note">${escapeHtml(e.note || "")}</td>
         <td class="row-actions">
           <button class="btn btn-icon" data-edit="${e.id}">Edit</button>
@@ -1082,7 +1365,7 @@
         Valor: e.amount,
         "Descrição": e.note || "",
         Categoria: e.category,
-        App: e.account || "",
+        ...(trackUsesSubs() ? { Subcategoria: e.subcategory || "" } : {}),
       }));
     const ws = XLSX.utils.json_to_sheet(rows, { cellDates: true });
     const wb = XLSX.utils.book_new();
@@ -1110,11 +1393,15 @@
         if (delError) throw delError;
 
         if (parsed.length > 0) {
+          const uses = trackUsesSubs();
+          const track = currentTrack();
           const rows = parsed.map((r) => ({
-            amount: r.amount, category: r.category, date: r.date, note: r.note || "",
-            type: r.type || "expense", account: r.account || "",
+            amount: r.amount, category: uses ? track.main_category : r.category, date: r.date, note: r.note || "",
+            type: r.type || "expense",
+            ...(uses ? { subcategory: r.subcategory || null } : {}),
             track_id: state.currentTrackId, user_id: state.session.user.id,
           }));
+          if (uses) await addMissingSubcategories(track, rows.map((r) => r.subcategory));
           const { data, error: insError } = await sb.from("expenses").insert(rows).select();
           if (insError) throw insError;
           state.data = data.map(fromDbRow);
@@ -1172,9 +1459,9 @@
     date: ["data", "date"],
     amount: ["valor", "amount", "value"],
     category: ["categoria", "category"],
+    subcategory: ["subcategoria", "subcategory"],
     note: ["descricao", "description", "note", "notes"],
     type: ["tipo", "type"],
-    account: ["app", "account", "conta"],
   };
 
   function detectColumns(headerKeys) {
@@ -1213,9 +1500,9 @@
         date: iso,
         amount: Math.abs(amount),
         category: (cols.category ? row[cols.category] : "").toString().trim() || "Uncategorized",
+        subcategory: (cols.subcategory ? row[cols.subcategory] : "").toString().trim(),
         note: (cols.note ? row[cols.note] : "").toString().trim(),
         type: cols.type ? typeFromRaw(row[cols.type]) : "expense",
-        account: (cols.account ? row[cols.account] : "").toString().trim(),
       });
     }
 
@@ -1227,7 +1514,7 @@
   }
 
   function rowKey(e) {
-    return [e.date, e.amount.toFixed(2), normalize(e.category), normalize(e.note), e.type].join("|");
+    return [e.date, e.amount.toFixed(2), normalize(e.category), normalize(e.subcategory), normalize(e.note), e.type].join("|");
   }
 
   importConfirmBtn.addEventListener("click", async () => {
@@ -1236,14 +1523,22 @@
       importModal.classList.add("hidden");
       return;
     }
+    const uses = trackUsesSubs();
+    const track = currentTrack();
     const existingKeys = new Set(state.data.map(rowKey));
     const toInsert = [];
     let skipped = 0;
-    for (const row of importPendingRows) {
+    for (const pending of importPendingRows) {
+      // In a track with a main category every row gets that category; what the file
+      // calls its category (or subcategory) becomes the row's subcategory.
+      const row = uses
+        ? { ...pending, category: track.main_category, subcategory: pending.subcategory || (pending.category !== "Uncategorized" && pending.category !== track.main_category ? pending.category : "") }
+        : { ...pending, subcategory: "" };
       const key = rowKey(row);
       if (existingKeys.has(key)) { skipped++; continue; }
       existingKeys.add(key);
-      toInsert.push({ ...row, track_id: state.currentTrackId, user_id: state.session.user.id });
+      const { subcategory, ...rest } = row;
+      toInsert.push({ ...rest, ...(uses ? { subcategory: subcategory || null } : {}), track_id: state.currentTrackId, user_id: state.session.user.id });
     }
     importModal.classList.add("hidden");
     if (toInsert.length === 0) {
@@ -1251,6 +1546,7 @@
       return;
     }
     try {
+      if (uses) await addMissingSubcategories(track, toInsert.map((r) => r.subcategory));
       const { data, error } = await sb.from("expenses").insert(toInsert).select();
       if (error) throw error;
       state.data.push(...data.map(fromDbRow));
@@ -1324,7 +1620,6 @@
               date,
               note: rule.note || "",
               type: rule.type,
-              account: rule.account || "",
               track_id: general.id,
               user_id: state.session.user.id,
               recurring_id: rule.id,
@@ -1371,7 +1666,7 @@
     recurringEmpty.classList.toggle("hidden", recurring.rules.length > 0);
     recurringList.innerHTML = recurring.rules.map((r) => {
       const range = r.start_month + (r.end_month ? " → " + r.end_month : " →");
-      const sub = [`day ${r.day_of_month}`, r.account, range, r.active ? "" : "paused"].filter(Boolean).join(" · ");
+      const sub = [`day ${r.day_of_month}`, range, r.active ? "" : "paused"].filter(Boolean).join(" · ");
       return `<li class="recurring-item${r.active ? "" : " paused"}">
         <div class="recurring-main">
           <span><strong>${fmtMoney(r.amount)}</strong> ${escapeHtml(r.type)} · ${escapeHtml(r.category)}${r.note ? " — " + escapeHtml(r.note) : ""}</span>
@@ -1396,14 +1691,12 @@
   }
 
   const recCategorySelect = document.getElementById("recCategory");
-  const recAccountSelect = document.getElementById("recAccount");
 
-  // Same options and "+ Add new…" behaviour as the Add Expense form's dropdowns.
+  // Same options and "+ Add new…" behaviour as the Add Expense form's dropdown.
   function fillRecurringSelects() {
     const cats = new Set(PRESET_CATEGORIES);
-    const accs = new Set(PRESET_ACCOUNTS);
-    recurring.rules.forEach((r) => { cats.add(r.category); if (r.account) accs.add(r.account); });
-    state.data.forEach((e) => { if (e.category) cats.add(e.category); if (e.account) accs.add(e.account); });
+    recurring.rules.forEach((r) => { cats.add(r.category); });
+    state.data.forEach((e) => { if (e.category) cats.add(e.category); });
 
     const fill = (select, values, placeholder, addLabel, defaultValue) => {
       const current = select.value && select.value !== "__new__" ? select.value : defaultValue;
@@ -1416,7 +1709,6 @@
       select.dataset.last = select.value;
     };
     fill(recCategorySelect, cats, "Select a category", "+ Add new category…", "");
-    fill(recAccountSelect, accs, "Select an account", "+ Add new account…", "Novo Banco");
   }
 
   function setRecurringSelect(select, value) {
@@ -1430,7 +1722,7 @@
     select.dataset.last = select.value;
   }
 
-  [[recCategorySelect, "New category name:"], [recAccountSelect, "New account name:"]].forEach(([select, promptText]) => {
+  [[recCategorySelect, "New category name:"]].forEach(([select, promptText]) => {
     select.addEventListener("change", () => {
       if (select.value === "__new__") {
         const name = (prompt(promptText) || "").trim();
@@ -1485,7 +1777,6 @@
       type: document.getElementById("recType").value,
       amount: parseFloat(document.getElementById("recAmount").value),
       category: document.getElementById("recCategory").value.trim(),
-      account: document.getElementById("recAccount").value.trim(),
       note: document.getElementById("recNote").value.trim(),
       day_of_month: parseInt(document.getElementById("recDay").value, 10),
       start_month: document.getElementById("recStart").value,
@@ -1532,7 +1823,6 @@
         document.getElementById("recType").value = rule.type;
         document.getElementById("recAmount").value = rule.amount;
         setRecurringSelect(recCategorySelect, rule.category);
-        setRecurringSelect(recAccountSelect, rule.account || "");
         document.getElementById("recNote").value = rule.note || "";
         document.getElementById("recDay").value = rule.day_of_month;
         document.getElementById("recStart").value = rule.start_month;
@@ -1657,6 +1947,8 @@
   // top of another (the Monthly list) come after it.
   const MODAL_CLOSE_BUTTONS = {
     importModal: "importCancelBtn",
+    newTrackModal: "newTrackCloseBtn",
+    trackCatsModal: "trackCatsCloseBtn",
     recurringModal: "recurringCloseBtn",
     monthlyListModal: "monthlyListCloseBtn",
     chartDetailModal: "chartDetailCloseBtn",
