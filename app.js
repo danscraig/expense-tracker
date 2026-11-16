@@ -1076,20 +1076,15 @@
 
     const cur = span(kind, y, m, d);
 
-    // A period still in progress is compared up to the same day, so say which day.
-    const ord = (n) => n + (n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th");
-    const until = kind === "month" && y === ny && m === nm ? " (until the " + ord(nd) + ")"
-      : kind === "year" && y === ny ? " (until " + nd + " " + SHORT_MONTHS[nm - 1] + ")" : "";
-
     if (kind === "day") {
       const p = new Date(y, m - 1, d - 1);
       return { kind, cur, prev: span("day", p.getFullYear(), p.getMonth() + 1, p.getDate()), prevLabel: "vs previous day", ly: span("day", y - 1, m, d), lyLabel: "vs same day last year" };
     }
     if (kind === "month") {
       const p = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
-      return { kind, cur, prev: span("month", p.y, p.m, 1), prevLabel: "vs previous month" + until, ly: span("month", y - 1, m, 1), lyLabel: "vs same month last year" + until };
+      return { kind, cur, prev: span("month", p.y, p.m, 1), prevLabel: "vs previous month", ly: span("month", y - 1, m, 1), lyLabel: "vs same month last year" };
     }
-    return { kind, cur, prev: null, ly: span("year", y - 1, 1, 1), lyLabel: "vs previous year" + until };
+    return { kind, cur, prev: null, ly: span("year", y - 1, 1, 1), lyLabel: "vs previous year" };
   }
 
   function renderMeasures() {
