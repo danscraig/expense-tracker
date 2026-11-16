@@ -778,7 +778,12 @@
     formTitle.textContent = "Edit Expense";
     submitBtn.textContent = "Save Changes";
     cancelEditBtn.classList.remove("hidden");
+    document.getElementById("deleteExpenseBtn").classList.remove("hidden");
   }
+
+  document.getElementById("deleteExpenseBtn").addEventListener("click", () => {
+    if (state.editId) deleteExpense(state.editId);
+  });
 
   function exitEditMode() {
     state.editId = null;
@@ -789,6 +794,7 @@
     formTitle.textContent = "Add Expense";
     submitBtn.textContent = "Add Expense";
     cancelEditBtn.classList.add("hidden");
+    document.getElementById("deleteExpenseBtn").classList.add("hidden");
     closeExpenseModal();
   }
 
@@ -987,6 +993,7 @@
   }
 
   function renderDashboard() {
+    updateFilterBadges();
     updateDashFilterNote();
     const filtered = filterByRange(state.data).filter(matchesFilters);
     const expenses = filtered.filter((e) => e.type === "expense");
@@ -1233,6 +1240,21 @@
 
   // ---------- table ----------
 
+  const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function shortDate(iso) {
+    const [, m, d] = iso.split("-").map(Number);
+    return d + " " + SHORT_MONTHS[m - 1];
+  }
+
+  // On a phone each transaction is one slim row: tap it to edit (Delete is in that window).
+  document.getElementById("expenseTableBody").addEventListener("click", (ev) => {
+    if (!window.matchMedia("(max-width: 600px)").matches || ev.target.closest("button")) return;
+    const tr = ev.target.closest("tr[data-id]");
+    if (!tr || isCurrentTrackClosed()) return;
+    const rec = state.data.find((e) => e.id === tr.dataset.id);
+    if (rec) enterEditMode(rec);
+  });
+
   const tbody = document.getElementById("expenseTableBody");
   const tableEmpty = document.getElementById("tableEmpty");
   const searchInput = document.getElementById("searchInput");
@@ -1325,6 +1347,7 @@
   });
 
   function renderTable() {
+    updateFilterBadges();
     const q = normalize(state.search);
     let rows = state.data.filter((e) =>
       (!q || normalize(e.note).includes(q) || normalize(displayCategory(e)).includes(q)) &&
@@ -1353,8 +1376,8 @@
     tableEmpty.classList.add("hidden");
 
     tbody.innerHTML = rows.map((e) => `
-      <tr>
-        <td data-label="Date">${e.date}</td>
+      <tr data-id="${e.id}"${e.recurring ? ' class="is-recurring"' : ""}>
+        <td data-label="Date"><span class="d-full">${e.date}</span><span class="d-short">${shortDate(e.date)}</span></td>
         <td class="amount-${e.type}" data-label="Amount">${fmtMoney(e.amount)}</td>
         <td data-label="Category">${escapeHtml(displayCategory(e))}</td>
         <td data-label="Type">${e.recurring ? `<span class="recurring-badge" title="Created automatically by a monthly transaction">↻ monthly</span>` : ""}<span class="type-badge ${e.type}">${e.type}</span></td>
@@ -1703,6 +1726,7 @@
       toast(`Added ${created} monthly transaction${created === 1 ? "" : "s"}.`);
     }
     renderRecurring();
+    renderHome();
   }
 
   function renderRecurring() {
@@ -2042,6 +2066,13 @@
     if (!document.hidden) refreshOnFocus();
   });
 
+  // ---------- no zoom ----------
+
+  // The viewport tag and touch-action cover most browsers; iOS Safari still needs these.
+  ["gesturestart", "gesturechange", "gestureend"].forEach((t) =>
+    document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
+  document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
   // ---------- init ----------
 
   function renderAll() {
@@ -2049,6 +2080,28 @@
     renderDashboard();
     renderTable();
     renderHome();
+  }
+
+  // ---------- collapsible filters (phones) ----------
+
+  function setupFiltersToggle(btnId, panelId) {
+    const btn = document.getElementById(btnId);
+    const panel = document.getElementById(panelId);
+    btn.addEventListener("click", () => {
+      const open = panel.classList.toggle("open");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.classList.toggle("on", open);
+    });
+  }
+  setupFiltersToggle("txFiltersBtn", "txFilters");
+  setupFiltersToggle("dashFiltersBtn", "dashFilters");
+
+  // "Filters (2)": how many filters are active, so a closed panel still tells you.
+  function updateFilterBadges() {
+    const tx = [state.categoryFilterValue, state.typeFilterValue, state.sourceFilterValue].filter(Boolean).length;
+    const dash = [state.categoryFilterValue, state.sourceFilterValue].filter(Boolean).length + (rangeSelect.value !== "month" ? 1 : 0);
+    document.getElementById("txFiltersBtn").innerHTML = "Filters" + (tx ? ` <span class="filters-count">${tx}</span>` : "");
+    document.getElementById("dashFiltersBtn").innerHTML = "Filters" + (dash ? ` <span class="filters-count">${dash}</span>` : "");
   }
 
   // ---------- home ----------
@@ -2070,19 +2123,10 @@
     sv.classList.toggle("neg", savings < 0);
     sv.classList.toggle("pos", savings > 0);
 
-    // How much of this month's income is spent, against the 60% target.
-    const block = document.getElementById("homeMeterBlock");
-    if (income > 0) {
-      const pct = spent / income * 100;
-      block.classList.remove("hidden");
-      document.getElementById("homeMeterText").textContent = `Spent ${pct.toFixed(1)}% of income · target ${SPEND_TARGET_PCT}%`;
-      const fill = document.getElementById("homeMeterFill");
-      fill.style.width = Math.min(pct, 100) + "%";
-      fill.classList.toggle("over", pct > SPEND_TARGET_PCT);
-      document.getElementById("homeMeterTarget").style.left = SPEND_TARGET_PCT + "%";
-    } else {
-      block.classList.add("hidden");
-    }
+    // Progress towards the part of income you can spend (SPEND_TARGET_PCT, 60%).
+    // Until this month's salary shows up in the transactions, the monthly (recurring)
+    // income rules stand in for it.
+    renderHomeMeter(month, spent, income);
 
     const recent = state.data.slice()
       .sort((x, y) => (x.date < y.date ? 1 : x.date > y.date ? -1 : 0))
@@ -2096,6 +2140,36 @@
         </span>
         <span class="amount-${e.type}">${e.type === "income" ? "+" : ""}${fmtMoney(e.amount)}</span>
       </button>`).join("");
+  }
+
+  function renderHomeMeter(month, spent, income) {
+    const block = document.getElementById("homeMeterBlock");
+    const track = currentTrack();
+    if (!track || !track.is_general) { block.classList.add("hidden"); return; }
+
+    const ym = todayISO().slice(0, 7);
+    const expectedRules = (recurring.rules || []).filter((r) =>
+      r.active && r.type === "income" && r.start_month <= ym && (!r.end_month || r.end_month >= ym) &&
+      !month.some((e) => e.type === "income" && e.category === r.category));
+    const expected = expectedRules.reduce((s, r) => s + Number(r.amount), 0);
+    const basis = income + expected;
+    if (!(basis > 0)) { block.classList.add("hidden"); return; }
+
+    const allowance = basis * SPEND_TARGET_PCT / 100;
+    const used = spent / allowance * 100;
+    const left = allowance - spent;
+    block.classList.remove("hidden");
+    document.getElementById("homeMeterText").textContent = `${fmtMoney(spent)} of ${fmtMoney(allowance)}`;
+    document.getElementById("homeMeterRight").textContent = left >= 0 ? `${fmtMoney(left)} left` : `${fmtMoney(-left)} over`;
+    document.getElementById("homeMeterRight").classList.toggle("over", left < 0);
+    const fill = document.getElementById("homeMeterFill");
+    fill.style.width = Math.min(used, 100) + "%";
+    fill.classList.toggle("over", used > 100);
+    fill.classList.toggle("warn", used > 85 && used <= 100);
+    document.getElementById("homeMeter").setAttribute("aria-valuenow", String(Math.round(Math.min(used, 100))));
+    document.getElementById("homeMeterNote").textContent = expected > 0
+      ? `You can spend ${SPEND_TARGET_PCT}% of ${fmtMoney(basis)}. Counting ${fmtMoney(expected)} from your monthly income until it appears in the transactions.`
+      : `You can spend ${SPEND_TARGET_PCT}% of this month's income (${fmtMoney(basis)}).`;
   }
 
   document.getElementById("homeRecent").addEventListener("click", (ev) => {

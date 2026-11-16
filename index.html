@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Expense Tracker</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.json">
@@ -84,8 +84,9 @@
         <div class="stat-card"><span class="stat-label">Savings</span><span class="stat-value" id="homeSavings">€0.00</span></div>
       </div>
       <div class="meter-block" id="homeMeterBlock">
-        <div class="meter-head"><span id="homeMeterText"></span></div>
-        <div class="meter" aria-hidden="true"><div class="meter-fill" id="homeMeterFill"></div><div class="meter-target" id="homeMeterTarget"></div></div>
+        <div class="meter-head"><span id="homeMeterText"></span><span id="homeMeterRight"></span></div>
+        <div class="meter" role="progressbar" aria-label="Spent of the amount you can spend this month" aria-valuemin="0" aria-valuemax="100" id="homeMeter"><div class="meter-fill" id="homeMeterFill"></div></div>
+        <p class="meter-note" id="homeMeterNote"></p>
       </div>
     </section>
     <section class="panel home-panel home-recent">
@@ -100,9 +101,11 @@
 
   <div id="tab-analytics" class="tab-pane hidden" role="tabpanel">
     <section class="panel dashboard-panel">
-      <div class="table-header">
+      <div class="table-header has-filters">
         <h2>Analytics</h2>
+        <button type="button" class="btn btn-ghost filters-toggle" id="dashFiltersBtn" aria-expanded="false" aria-controls="dashFilters">Filters</button>
         <div class="table-filters">
+         <div class="filters-panel" id="dashFilters">
           <select id="rangeSelect" aria-label="Range">
             <option value="all">All time</option>
             <option value="year">This year</option>
@@ -132,6 +135,7 @@
             <option value="manual">Manual only</option>
           </select>
           <button type="button" class="btn btn-ghost" id="dashClearFiltersBtn">Clear Filters</button>
+         </div>
         </div>
       </div>
       <p id="dashFilterNote" class="dash-filter-note hidden">
@@ -182,9 +186,12 @@
 
   <div id="tab-transactions" class="tab-pane hidden" role="tabpanel">
     <section class="panel table-panel">
-      <div class="table-header">
+      <div class="table-header has-filters">
         <h2>All Transactions</h2>
+        <button type="button" class="btn btn-ghost filters-toggle" id="txFiltersBtn" aria-expanded="false" aria-controls="txFilters">Filters</button>
         <div class="table-filters">
+          <input type="text" id="searchInput" placeholder="Search note or category...">
+         <div class="filters-panel" id="txFilters">
           <select id="categoryFilter">
             <option value="">All Categories</option>
           </select>
@@ -199,8 +206,8 @@
             <option value="recurring">Monthly only</option>
             <option value="manual">Manual only</option>
           </select>
-          <input type="text" id="searchInput" placeholder="Search note or category...">
           <button type="button" class="btn btn-ghost" id="clearFiltersBtn">Clear Filters</button>
+         </div>
         </div>
       </div>
       <div class="table-wrap">
@@ -321,6 +328,7 @@
         </div>
 
         <div class="form-actions">
+          <button type="button" class="btn btn-danger hidden" id="deleteExpenseBtn">Delete</button>
           <button type="submit" class="btn btn-primary" id="submitBtn">Add Expense</button>
           <button type="button" class="btn btn-ghost hidden" id="cancelEditBtn">Cancel</button>
         </div>
