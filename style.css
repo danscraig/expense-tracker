@@ -827,3 +827,25 @@ body:has(.modal:not(.hidden)) { overflow: hidden; }
 /* ---------- home filters ---------- */
 .home-panel .table-header.has-filters { margin-bottom: 12px; }
 .table-header.has-filters .home-month { margin: 0; }
+
+/* Track picker: a quiet text-style dropdown instead of a boxed field. */
+.track-bar { padding-bottom: 10px; margin-bottom: 12px; }
+.track-picker { width: auto; }
+.track-picker select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23778' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 2px center;
+  border: none;
+  box-shadow: none;
+  padding: 4px 18px 4px 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.track-picker select:hover { color: var(--text); }
+@media (max-width: 600px) {
+  .track-bar .track-picker { flex: 0 1 auto; }
+  .track-bar .track-picker select { flex: 0 1 auto; }
+}
