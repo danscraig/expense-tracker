@@ -462,7 +462,7 @@
     if (!track.main_category) {
       trackCatsBody.innerHTML = closed
         ? `<p class="sub-hint">Reopen this track to set its main category.</p>`
-        : `<p class="sub-hint">Pick the main category of "${escapeHtml(track.name)}". Its transactions will all get this category (and it is the one that reaches General when the track is closed). The categories they have now become subcategories of this track.</p>
+        : `<p class="sub-hint">Choose the main category. Existing categories become subcategories.</p>
            <div class="field-row"><select id="setMainSelect"></select></div>
            <div class="modal-actions"><button type="button" class="btn btn-primary" id="setMainBtn">Set main category</button></div>`;
       if (!closed) {
@@ -477,7 +477,7 @@
     state.data.forEach((e) => { if (e.subcategory) counts[e.subcategory] = (counts[e.subcategory] || 0) + 1; });
     const subs = [...(track.subcategories || [])].sort();
     trackCatsBody.innerHTML =
-      `<p class="sub-hint">Main category: <strong>${escapeHtml(track.main_category)}</strong>. Subcategories stay inside this track${closed ? " (closed, read-only)" : ""}.</p>` +
+      `<p class="sub-hint">Main category: <strong>${escapeHtml(track.main_category)}</strong>${closed ? " · read-only" : ""}</p>` +
       (subs.length
         ? `<ul class="recurring-list">${subs.map((s) => `<li class="recurring-item">
             <span class="recurring-main"><span>${escapeHtml(s)}</span><span class="recurring-sub">${counts[s] || 0} transaction${(counts[s] || 0) === 1 ? "" : "s"}</span></span>
@@ -1000,24 +1000,92 @@
     const income = filtered.filter((e) => e.type === "income");
     const investments = filtered.filter((e) => e.type === "investment");
 
-    const totalSpending = expenses.reduce((s, e) => s + e.amount, 0);
-    const totalIncome = income.reduce((s, e) => s + e.amount, 0);
-    const totalInvested = investments.reduce((s, e) => s + e.amount, 0);
-    const savings = totalIncome - totalSpending;
-
-    document.getElementById("statTotalSpending").textContent = fmtMoney(totalSpending);
-    document.getElementById("statTotalIncome").textContent = fmtMoney(totalIncome);
-    document.getElementById("statSpentPct").textContent =
-      totalIncome > 0 ? (totalSpending / totalIncome * 100).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%" : "—";
-    document.getElementById("statSavings").textContent = fmtMoney(savings);
-    document.getElementById("statSavings").classList.toggle("neg", savings < 0);
-    document.getElementById("statSavings").classList.toggle("pos", savings > 0);
-    document.getElementById("statSpentPct").classList.toggle("neg", totalIncome > 0 && totalSpending / totalIncome * 100 > SPEND_TARGET_PCT);
-    document.getElementById("statInvested").textContent = fmtMoney(totalInvested);
-
+    renderMeasures();
     renderCategoryChart(expenses);
     renderTimeChart(expenses);
+    renderYoyChart();
     renderPctChart();
+  }
+
+  // ---------- measures: how this period compares with earlier ones ----------
+
+  // Compared like for like: "so far" this month / this year against the same days earlier.
+  function renderMeasures() {
+    const exp = state.data.filter((e) => e.type === "expense" && matchesFilters(e));
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth() + 1, d = now.getDate();
+    const pad = (n) => String(n).padStart(2, "0");
+    const sum = (from, to) => exp.reduce((s, e) => (e.date >= from && e.date <= to ? s + e.amount : s), 0);
+    const upTo = (yy, mm) => yy + "-" + pad(mm) + "-" + pad(Math.min(d, new Date(yy, mm, 0).getDate()));
+    const first = (yy, mm) => yy + "-" + pad(mm) + "-01";
+    const prev = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
+
+    const thisMonth = sum(first(y, m), upTo(y, m));
+    const lastMonth = sum(first(prev.y, prev.m), upTo(prev.y, prev.m));
+    const sameMonthLY = sum(first(y - 1, m), upTo(y - 1, m));
+    const ytd = sum(y + "-01-01", upTo(y, m));
+    const ytdLY = sum((y - 1) + "-01-01", upTo(y - 1, m));
+
+    // Average of the last 3 complete months that have spending.
+    const fullMonths = [];
+    for (let k = 1; k <= 3; k++) {
+      const dt = new Date(y, m - 1 - k, 1);
+      const yy = dt.getFullYear(), mm = dt.getMonth() + 1;
+      const total = sum(first(yy, mm), yy + "-" + pad(mm) + "-31");
+      if (total > 0) fullMonths.push(total);
+    }
+    const avg = fullMonths.length ? fullMonths.reduce((s, v) => s + v, 0) / fullMonths.length : 0;
+
+    const card = (label, cur, before, none) => {
+      if (!(before > 0)) return `<div class="stat-card"><span class="stat-label">${label}</span><span class="stat-value">—</span><span class="measure-sub">${none}</span></div>`;
+      const diff = cur - before;
+      const pct = diff / before * 100;
+      const sign = diff > 0 ? "+" : "";
+      const cls = diff > 0 ? "neg" : diff < 0 ? "pos" : "";
+      return `<div class="stat-card"><span class="stat-label">${label}</span><span class="stat-value ${cls}">${sign}${fmtMoney(diff)}</span><span class="measure-sub">${sign}${pct.toFixed(1)}% · ${fmtMoney(cur)} vs ${fmtMoney(before)}</span></div>`;
+    };
+    document.getElementById("measures").innerHTML =
+      card("This month vs last month", thisMonth, lastMonth, "Nothing by this day last month") +
+      card("This month vs last year", thisMonth, sameMonthLY, "No data for last year") +
+      card("Year to date vs last year", ytd, ytdLY, "No data for last year") +
+      `<div class="stat-card"><span class="stat-label">Monthly average</span><span class="stat-value">${avg > 0 ? fmtMoney(avg) : "—"}</span><span class="measure-sub">${avg > 0 ? "Last " + fullMonths.length + " full month" + (fullMonths.length === 1 ? "" : "s") : "No full months yet"}</span></div>`;
+  }
+
+  // Month by month, this year next to last year.
+  let yoyChart = null;
+  function renderYoyChart() {
+    const ctx = document.getElementById("yoyChart");
+    const emptyNote = document.getElementById("yoyEmpty");
+    if (yoyChart) { yoyChart.destroy(); yoyChart = null; }
+
+    const y = new Date().getFullYear();
+    const cur = new Array(12).fill(0), before = new Array(12).fill(0);
+    state.data.forEach((e) => {
+      if (e.type !== "expense" || !matchesFilters(e)) return;
+      const yy = Number(e.date.slice(0, 4)), mm = Number(e.date.slice(5, 7)) - 1;
+      if (yy === y) cur[mm] += e.amount; else if (yy === y - 1) before[mm] += e.amount;
+    });
+    const hasBefore = before.some((v) => v > 0);
+    if (!cur.some((v) => v > 0) && !hasBefore) {
+      ctx.classList.add("hidden");
+      emptyNote.classList.remove("hidden");
+      return;
+    }
+    ctx.classList.remove("hidden");
+    emptyNote.classList.add("hidden");
+
+    const datasets = [];
+    if (hasBefore) datasets.push({ label: String(y - 1), data: before, backgroundColor: "#c9d3da", borderRadius: 4 });
+    datasets.push({ label: String(y), data: cur, backgroundColor: "#364B59", borderRadius: 4 });
+    yoyChart = new Chart(ctx, {
+      type: "bar",
+      data: { labels: SHORT_MONTHS, datasets },
+      options: {
+        responsive: true,
+        plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtMoney(c.parsed.y)}` } } },
+        scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { callback: (v) => fmtMoney(v) } } },
+      },
+    });
   }
 
   // Expenses as a share of income, month by month. Uses every month of the track
@@ -1178,7 +1246,7 @@
         responsive: true,
         plugins: {
           legend: { position: window.innerWidth < 600 ? "bottom" : "right", labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${fmtMoney(ctx.parsed)}` } },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${fmtMoney(ctx.parsed)} (${(ctx.parsed / ctx.dataset.data.reduce((s, v) => s + v, 0) * 100).toFixed(1)}%)` } },
         },
       },
     });
@@ -1960,9 +2028,7 @@
     const show = age >= BACKUP_INTERVAL_DAYS && !(snoozeUntil && snoozeUntil > today);
     backupBanner.classList.toggle("hidden", !show);
     if (show) {
-      backupBannerText.textContent =
-        (last ? `It's been ${age} days since your last backup.` : "You haven't backed up your data yet.") +
-        " Export your General track (JSON or Excel) to keep a copy.";
+      backupBannerText.textContent = last ? `Last backup ${age} days ago.` : "No backup yet.";
     }
   }
 
@@ -2115,13 +2181,19 @@
     const month = state.data.filter((e) => e.date.slice(0, 7) === ym);
     const spent = month.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
     const income = month.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
+    const invested = month.filter((e) => e.type === "investment").reduce((s, e) => s + e.amount, 0);
     const savings = income - spent;
     document.getElementById("homeSpent").textContent = fmtMoney(spent);
     document.getElementById("homeIncome").textContent = fmtMoney(income);
+    const pctEl = document.getElementById("homePct");
+    pctEl.textContent = income > 0 ? (spent / income * 100).toFixed(1) + "%" : "—";
+    pctEl.classList.toggle("neg", income > 0 && spent / income * 100 > SPEND_TARGET_PCT);
     const sv = document.getElementById("homeSavings");
     sv.textContent = fmtMoney(savings);
     sv.classList.toggle("neg", savings < 0);
     sv.classList.toggle("pos", savings > 0);
+    document.getElementById("homeInvested").textContent = fmtMoney(invested);
+    renderHomePie(month);
 
     // Progress towards the part of income you can spend (SPEND_TARGET_PCT, 60%).
     // Until this month's salary shows up in the transactions, the monthly (recurring)
@@ -2140,6 +2212,43 @@
         </span>
         <span class="amount-${e.type}">${e.type === "income" ? "+" : ""}${fmtMoney(e.amount)}</span>
       </button>`).join("");
+  }
+
+  // Pie of this month's spending by category, with each category's share of the total.
+  let homePie = null;
+  function renderHomePie(month) {
+    const wrap = document.getElementById("homePieWrap");
+    const empty = document.getElementById("homePieEmpty");
+    if (homePie) { homePie.destroy(); homePie = null; }
+
+    const totals = {};
+    month.forEach((e) => { if (e.type === "expense") { const c = displayCategory(e); totals[c] = (totals[c] || 0) + e.amount; } });
+    let labels = Object.keys(totals).sort((a, b) => totals[b] - totals[a]);
+    const total = labels.reduce((s, l) => s + totals[l], 0);
+    if (!(total > 0)) { wrap.classList.add("hidden"); empty.classList.remove("hidden"); return; }
+    wrap.classList.remove("hidden");
+    empty.classList.add("hidden");
+
+    // Many small categories get folded into one "Other" slice.
+    let values = labels.map((l) => totals[l]);
+    if (labels.length > 8) {
+      const rest = values.slice(7).reduce((s, v) => s + v, 0);
+      labels = [...labels.slice(0, 7), "Other"];
+      values = [...values.slice(0, 7), rest];
+    }
+    const pct = (v) => (v / total * 100).toFixed(1) + "%";
+    document.getElementById("homePieLegend").innerHTML = labels.map((l, i) =>
+      `<li><span class="pie-dot" style="background:${paletteColor(i)}"></span><span class="pie-name">${escapeHtml(l)}</span><strong>${pct(values[i])}</strong></li>`).join("");
+
+    homePie = new Chart(document.getElementById("homePie"), {
+      type: "pie",
+      data: { labels, datasets: [{ data: values, backgroundColor: labels.map((_, i) => paletteColor(i)), borderColor: "#ffffff", borderWidth: 2 }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.label}: ${fmtMoney(c.parsed)} (${pct(c.parsed)})` } } },
+      },
+    });
   }
 
   function renderHomeMeter(month, spent, income) {
@@ -2167,9 +2276,7 @@
     fill.classList.toggle("over", used > 100);
     fill.classList.toggle("warn", used > 85 && used <= 100);
     document.getElementById("homeMeter").setAttribute("aria-valuenow", String(Math.round(Math.min(used, 100))));
-    document.getElementById("homeMeterNote").textContent = expected > 0
-      ? `You can spend ${SPEND_TARGET_PCT}% of ${fmtMoney(basis)}. Counting ${fmtMoney(expected)} from your monthly income until it appears in the transactions.`
-      : `You can spend ${SPEND_TARGET_PCT}% of this month's income (${fmtMoney(basis)}).`;
+    document.getElementById("homeMeterNote").textContent = `${SPEND_TARGET_PCT}% of ${fmtMoney(basis)}${expected > 0 ? " expected income" : " income"}`;
   }
 
   document.getElementById("homeRecent").addEventListener("click", (ev) => {

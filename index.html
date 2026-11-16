@@ -49,7 +49,7 @@
     <span id="backupBannerText"></span>
     <div class="backup-banner-actions">
       <button type="button" class="btn btn-primary" id="backupNowBtn">Back up now</button>
-      <button type="button" class="btn btn-ghost" id="backupLaterBtn">Remind me in 7 days</button>
+      <button type="button" class="btn btn-ghost" id="backupLaterBtn">Later</button>
     </div>
   </div>
 
@@ -78,10 +78,12 @@
   <div id="tab-home" class="tab-pane" role="tabpanel">
     <section class="panel home-panel">
       <p class="home-month" id="homeMonth"></p>
-      <div class="home-cards">
+      <div class="stat-cards" id="homeCards">
         <div class="stat-card"><span class="stat-label">Spent</span><span class="stat-value" id="homeSpent">€0.00</span></div>
         <div class="stat-card"><span class="stat-label">Income</span><span class="stat-value" id="homeIncome">€0.00</span></div>
+        <div class="stat-card"><span class="stat-label">Spent of income</span><span class="stat-value" id="homePct">—</span></div>
         <div class="stat-card"><span class="stat-label">Savings</span><span class="stat-value" id="homeSavings">€0.00</span></div>
+        <div class="stat-card"><span class="stat-label">Invested</span><span class="stat-value" id="homeInvested">€0.00</span></div>
       </div>
       <div class="meter-block" id="homeMeterBlock">
         <div class="meter-head"><span id="homeMeterText"></span><span id="homeMeterRight"></span></div>
@@ -89,13 +91,21 @@
         <p class="meter-note" id="homeMeterNote"></p>
       </div>
     </section>
+    <section class="panel home-panel">
+      <h2>Spending by category</h2>
+      <div class="home-pie" id="homePieWrap">
+        <div class="home-pie-canvas"><canvas id="homePie"></canvas></div>
+        <ul class="pie-legend" id="homePieLegend"></ul>
+      </div>
+      <p class="empty-note hidden" id="homePieEmpty">No expenses this month.</p>
+    </section>
     <section class="panel home-panel home-recent">
       <div class="table-header">
         <h2>Recent transactions</h2>
         <button type="button" class="btn btn-ghost" id="homeSeeAllBtn">See all</button>
       </div>
       <div id="homeRecent" class="recent-list"></div>
-      <p class="empty-note hidden" id="homeEmpty">No transactions yet. Tap + to add the first one.</p>
+      <p class="empty-note hidden" id="homeEmpty">Nothing yet. Tap +.</p>
     </section>
   </div>
 
@@ -142,28 +152,7 @@
         <span id="dashFilterNoteText"></span>
         <button type="button" class="btn btn-ghost" id="dashFilterNoteClear">Clear</button>
       </p>
-      <div class="stat-cards">
-        <div class="stat-card">
-          <span class="stat-label">Total Spending</span>
-          <span class="stat-value" id="statTotalSpending">€0.00</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Total Income</span>
-          <span class="stat-value" id="statTotalIncome">€0.00</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Spent of Income</span>
-          <span class="stat-value" id="statSpentPct">—</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Savings</span>
-          <span class="stat-value" id="statSavings">€0.00</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Invested</span>
-          <span class="stat-value" id="statInvested">€0.00</span>
-        </div>
-      </div>
+      <div class="measures" id="measures"></div>
       <div class="charts">
         <div class="chart-box">
           <h3>Spending by Category</h3>
@@ -176,9 +165,14 @@
           <p class="empty-note hidden" id="timeEmpty">No expense data in this range.</p>
         </div>
         <div class="chart-box chart-box-wide">
-          <h3>Spent of Income by Month <span class="chart-sub">(all months · target 60%)</span></h3>
+          <h3>Monthly Spending: This Year vs Last Year</h3>
+          <canvas id="yoyChart"></canvas>
+          <p class="empty-note hidden" id="yoyEmpty">No expenses yet.</p>
+        </div>
+        <div class="chart-box chart-box-wide">
+          <h3>Spent of Income by Month</h3>
           <canvas id="pctChart"></canvas>
-          <p class="empty-note hidden" id="pctEmpty">No income recorded yet, so there is no percentage to show.</p>
+          <p class="empty-note hidden" id="pctEmpty">No income yet.</p>
         </div>
       </div>
     </section>
@@ -224,7 +218,7 @@
           </thead>
           <tbody id="expenseTableBody"></tbody>
         </table>
-        <p class="empty-note hidden" id="tableEmpty">No transactions yet. Add one in the Add Expense tab, or import an Excel file in Tools.</p>
+        <p class="empty-note hidden" id="tableEmpty">No transactions.</p>
       </div>
     </section>
   </div>
@@ -232,26 +226,22 @@
   <div id="tab-settings" class="tab-pane hidden" role="tabpanel">
     <section class="panel tools-panel settings-panel">
       <h2>Data</h2>
-      <p class="tools-note">Import, export and restore apply to the track selected above.</p>
+      <p class="tools-note">For the selected track.</p>
       <div class="tools-list">
         <div class="tool-row">
           <button id="importBtn" class="btn btn-tool btn-tool-primary">Import Excel</button>
-          <span class="tool-desc">Add transactions from an Excel file.</span>
         </div>
         <div class="tool-row">
           <button id="exportExcelBtn" class="btn btn-tool btn-tool-rose">Export Excel</button>
-          <span class="tool-desc">Download the track as an Excel file.</span>
         </div>
         <div class="tool-row">
           <button id="exportBtn" class="btn btn-tool btn-tool-invest">Export JSON</button>
-          <span class="tool-desc">Download a backup file of the track.</span>
         </div>
         <div class="tool-row">
           <label class="btn btn-tool btn-tool-purple file-label">
             Restore JSON
             <input type="file" id="restoreInput" accept="application/json" hidden>
           </label>
-          <span class="tool-desc">Replace the track's transactions with a backup file.</span>
         </div>
         <input type="file" id="importInput" accept=".xlsx,.xls" hidden>
       </div>
@@ -259,14 +249,12 @@
 
     <section class="panel settings-panel">
       <h2>Monthly transactions</h2>
-      <p class="tools-note">Rules that add a transaction to General every month (salary, subscriptions, investments).</p>
       <button type="button" class="btn btn-tool btn-tool-primary" id="recurringBtn">Monthly Transactions</button>
     </section>
 
     <section class="panel settings-panel">
       <h2>Backup</h2>
       <p class="tools-note" id="settingsBackup">Last backup: —</p>
-      <p class="tools-note">Export your General track (JSON or Excel) from the Data section to keep a copy.</p>
     </section>
 
     <section class="panel settings-panel">
@@ -361,7 +349,7 @@
       <button type="button" class="modal-close" id="recurringCloseBtn" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
-    <p class="modal-preview">Added to the General track automatically each month, the first time you open the app on or after the day.</p>
+    <p class="modal-preview">Added to General on its day each month.</p>
     <button type="button" class="btn btn-secondary btn-block" id="allMonthlyBtn">All Monthly Transactions</button>
 
     <form id="recurringForm" class="recurring-form">
@@ -431,7 +419,7 @@
       <div class="field-row">
         <label for="newTrackCategory">Main category</label>
         <select id="newTrackCategory" required></select>
-        <span class="tool-desc">This is the category its transactions get in General when the track is closed.</span>
+        <span class="tool-desc">Used in General when the track is closed.</span>
       </div>
       <div class="modal-actions">
         <button type="submit" class="btn btn-primary" id="newTrackCreateBtn">Create</button>
