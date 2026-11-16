@@ -1075,23 +1075,27 @@
     };
 
     const cur = span(kind, y, m, d);
+
+    // A period still in progress is compared up to the same day, so say which day.
+    const ord = (n) => n + (n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th");
+    const until = kind === "month" && y === ny && m === nm ? " (until the " + ord(nd) + ")"
+      : kind === "year" && y === ny ? " (until " + nd + " " + SHORT_MONTHS[nm - 1] + ")" : "";
+
     if (kind === "day") {
       const p = new Date(y, m - 1, d - 1);
       return { kind, cur, prev: span("day", p.getFullYear(), p.getMonth() + 1, p.getDate()), prevLabel: "vs previous day", ly: span("day", y - 1, m, d), lyLabel: "vs same day last year" };
     }
     if (kind === "month") {
       const p = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
-      return { kind, cur, prev: span("month", p.y, p.m, 1), prevLabel: "vs previous month", ly: span("month", y - 1, m, 1), lyLabel: "vs same month last year" };
+      return { kind, cur, prev: span("month", p.y, p.m, 1), prevLabel: "vs previous month" + until, ly: span("month", y - 1, m, 1), lyLabel: "vs same month last year" + until };
     }
-    return { kind, cur, prev: null, ly: span("year", y - 1, 1, 1), lyLabel: "vs previous year" };
+    return { kind, cur, prev: null, ly: span("year", y - 1, 1, 1), lyLabel: "vs previous year" + until };
   }
 
   function renderMeasures() {
     const box = document.getElementById("measures");
     const periods = measurePeriods();
     if (!periods) { box.innerHTML = ""; box.classList.add("hidden"); return; }
-    box.classList.remove("hidden");
-
     // Same category / entries / type filters as the charts.
     const exp = state.data.filter((e) => e.type === "expense" && matchesFilters(e));
     const sum = ([from, to]) => exp.reduce((s, e) => (e.date >= from && e.date <= to ? s + e.amount : s), 0);
@@ -1099,14 +1103,16 @@
 
     const card = (label, range) => {
       const before = sum(range);
-      if (!(before > 0)) return `<div class="stat-card"><span class="stat-label">${label}</span><span class="stat-value">—</span></div>`;
+      // Nothing to compare with, or no change at all: no card.
+      if (!(before > 0)) return "";
       const pct = (now - before) / before * 100;
+      if (Math.abs(pct) < 0.05) return "";
       const cls = pct > 0 ? "neg" : pct < 0 ? "pos" : "";
       return `<div class="stat-card"><span class="stat-label">${label}</span><span class="stat-value ${cls}">${pct > 0 ? "+" : ""}${pct.toFixed(1)}%</span></div>`;
     };
-    box.innerHTML =
-      (periods.prev ? card(periods.prevLabel, periods.prev) : "") +
-      card(periods.lyLabel, periods.ly);
+    const html = (periods.prev ? card(periods.prevLabel, periods.prev) : "") + card(periods.lyLabel, periods.ly);
+    box.innerHTML = html;
+    box.classList.toggle("hidden", !html);
   }
 
   // Month by month, this year next to last year.
