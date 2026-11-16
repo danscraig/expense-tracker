@@ -281,7 +281,7 @@
 
         <div class="field-row">
           <label for="amount">Amount (€)</label>
-          <input type="number" id="amount" step="0.01" min="0" required placeholder="0.00">
+          <input type="text" inputmode="decimal" id="amount" required placeholder="0,00" autocomplete="off">
         </div>
 
         <div class="field-row" id="categoryRow">
@@ -363,7 +363,7 @@
           </select>
         </label>
         <label>Amount (€)
-          <input type="number" id="recAmount" step="0.01" min="0" required placeholder="0.00">
+          <input type="text" inputmode="decimal" id="recAmount" required placeholder="0,00" autocomplete="off">
         </label>
         <label>Category
           <select id="recCategory" required>

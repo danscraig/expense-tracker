@@ -36,6 +36,33 @@
     return (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   }
 
+  // Amounts can be typed with a comma or a dot: "12,5", "12.5", "1.234,56" and "1,234.56"
+  // all work (the last separator is the decimal one). Returns NaN when it is not a number.
+  function parseAmount(raw) {
+    let s = String(raw == null ? "" : raw).trim().replace(/[\s\u00a0\u20ac]/g, "");
+    if (!s) return NaN;
+    const lastComma = s.lastIndexOf(","), lastDot = s.lastIndexOf(".");
+    if (lastComma > -1 && lastDot > -1) {
+      const dec = lastComma > lastDot ? "," : ".";
+      const thousands = dec === "," ? "." : ",";
+      s = s.split(thousands).join("").replace(dec, ".");
+    } else if (lastComma > -1) {
+      s = s.replace(/,/g, (m, i) => (i === lastComma ? "." : ""));
+    } else if (lastDot > -1) {
+      s = s.replace(/\./g, (m, i) => (i === lastDot ? "." : ""));
+    }
+    return /^(\d+\.?\d*|\.\d+)$/.test(s) ? parseFloat(s) : NaN;
+  }
+
+  // Keep only digits, commas and dots while typing (the phone keyboard may offer more).
+  function limitToNumberChars(id) {
+    const el = document.getElementById(id);
+    el.addEventListener("input", () => {
+      const clean = el.value.replace(/[^\d.,]/g, "");
+      if (clean !== el.value) el.value = clean;
+    });
+  }
+
   function fmtMoney(n) {
     const v = Number(n) || 0;
     const sign = v < 0 ? "-" : "";
@@ -721,7 +748,7 @@
       toast("This track is closed. Reopen it to make changes.");
       return;
     }
-    const amount = parseFloat(document.getElementById("amount").value);
+    const amount = parseAmount(document.getElementById("amount").value);
     const uses = trackUsesSubs();
     const category = uses ? currentTrack().main_category : document.getElementById("category").value.trim();
     const subcategory = uses ? (document.getElementById("subcategory").value || null) : null;
@@ -1654,7 +1681,7 @@
     const mapped = [];
     for (const row of rows) {
       const iso = excelValueToISO(row[cols.date]);
-      const amount = parseFloat(row[cols.amount]);
+      const amount = typeof row[cols.amount] === "string" ? parseAmount(row[cols.amount]) : parseFloat(row[cols.amount]);
       if (!iso || isNaN(amount)) continue;
       mapped.push({
         date: iso,
@@ -1936,7 +1963,7 @@
     e.preventDefault();
     const payload = {
       type: document.getElementById("recType").value,
-      amount: parseFloat(document.getElementById("recAmount").value),
+      amount: parseAmount(document.getElementById("recAmount").value),
       category: document.getElementById("recCategory").value.trim(),
       note: document.getElementById("recNote").value.trim(),
       day_of_month: parseInt(document.getElementById("recDay").value, 10),
@@ -2157,6 +2184,9 @@
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refreshOnFocus();
   });
+
+  limitToNumberChars("amount");
+  limitToNumberChars("recAmount");
 
   // ---------- no zoom ----------
 
