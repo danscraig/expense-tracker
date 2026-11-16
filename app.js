@@ -314,6 +314,7 @@
       state.currentTrackId = (lastId && state.tracks.some((t) => t.id === lastId)) ? lastId : generalTrack.id;
       await maybeMigrateLegacyData(generalTrack.id);
       await refreshCurrentTrackData();
+      applyDefaultRange();
       renderTrackSelect();
       renderAll();
       refreshBackupBanner();
@@ -352,6 +353,19 @@
 
   function currentTrack() {
     return state.tracks.find((t) => t.id === state.currentTrackId);
+  }
+
+  // General defaults to "This month"; every other track to "All time".
+  function defaultRange() {
+    const t = currentTrack();
+    return t && !t.is_general ? "all" : "month";
+  }
+  function applyDefaultRange() {
+    const r = defaultRange();
+    state.homeRange = r;
+    document.getElementById("homeRangeSelect").value = r;
+    rangeSelect.value = r;
+    customRange.classList.add("hidden");
   }
 
   function isCurrentTrackClosed() {
@@ -603,6 +617,7 @@
     state.currentTrackId = id;
     state.categoryFilterValue = "";
     localStorage.setItem(LAST_TRACK_KEY, id);
+    applyDefaultRange();
     try {
       await refreshCurrentTrackData();
     } catch (err) {
@@ -655,6 +670,7 @@
     state.currentTrackId = generalTrack.id;
     state.categoryFilterValue = "";
     localStorage.setItem(LAST_TRACK_KEY, generalTrack.id);
+    applyDefaultRange();
     renderTrackSelect();
     refreshCurrentTrackData().then(renderAll).catch((err) => toast("Could not load track data: " + err.message));
 
@@ -678,6 +694,7 @@
         state.currentTrackId = pending.track.id;
         localStorage.setItem(LAST_TRACK_KEY, pending.track.id);
         state.data = pending.data;
+        applyDefaultRange();
         renderTrackSelect();
         renderAll();
         toast(`"${pending.track.name}" restored.`);
@@ -1454,8 +1471,8 @@
   document.getElementById("clearFiltersBtn").addEventListener("click", clearAllFilters);
   document.getElementById("dashClearFiltersBtn").addEventListener("click", clearAllFilters);
   document.getElementById("homeClearFiltersBtn").addEventListener("click", () => {
-    state.homeRange = "month";
-    document.getElementById("homeRangeSelect").value = "month";
+    state.homeRange = defaultRange();
+    document.getElementById("homeRangeSelect").value = state.homeRange;
     clearAllFilters();
   });
   document.getElementById("homeRangeSelect").addEventListener("change", (e) => {
@@ -2247,10 +2264,10 @@
   // "Filters (2)": how many filters are active, so a closed panel still tells you.
   function updateFilterBadges() {
     const tx = [state.categoryFilterValue, state.typeFilterValue, state.sourceFilterValue].filter(Boolean).length;
-    const dash = [state.categoryFilterValue, state.sourceFilterValue].filter(Boolean).length + (rangeSelect.value !== "month" ? 1 : 0);
+    const dash = [state.categoryFilterValue, state.sourceFilterValue].filter(Boolean).length + (rangeSelect.value !== defaultRange() ? 1 : 0);
     document.getElementById("txFiltersBtn").innerHTML = "Filters" + (tx ? ` <span class="filters-count">${tx}</span>` : "");
     document.getElementById("dashFiltersBtn").innerHTML = "Filters" + (dash ? ` <span class="filters-count">${dash}</span>` : "");
-    const home = [state.categoryFilterValue, state.sourceFilterValue].filter(Boolean).length + (state.homeRange !== "month" ? 1 : 0);
+    const home = [state.categoryFilterValue, state.sourceFilterValue].filter(Boolean).length + (state.homeRange !== defaultRange() ? 1 : 0);
     document.getElementById("homeFiltersBtn").innerHTML = "Filters" + (home ? ` <span class="filters-count">${home}</span>` : "");
   }
 
